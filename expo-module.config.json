@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android", "web"],
+  "apple": {
+    "modules": ["EpsonPrintersModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.printers.EpsonPrintersModule"]
+  }
+}

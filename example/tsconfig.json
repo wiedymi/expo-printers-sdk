@@ -1,0 +1,10 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "expo-printers-sdk": ["../src/index"],
+      "expo-printers-sdk/*": ["../src/*"]
+    }
+  }
+}
