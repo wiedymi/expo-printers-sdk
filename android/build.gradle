@@ -50,4 +50,10 @@ android {
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation files('libs/ePOS2.jar')
+    implementation files('libs/rongta_printer_library.jar')
+
+    implementation 'com.starmicronics:stario:2.10.1'
+    implementation 'com.starmicronics:starioextension:1.15.1'
+
+    implementation 'androidx.core:core-ktx:1.15.0'
 }
