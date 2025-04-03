@@ -1,9 +1,9 @@
 {
   "platforms": ["apple", "android", "web"],
   "apple": {
-    "modules": ["EpsonPrintersModule"]
+    "modules": ["EpsonPrintersModule", "RongtaPrintersModule"]
   },
   "android": {
-    "modules": ["expo.modules.printers.EpsonPrintersModule"]
+    "modules": ["expo.modules.printers.EpsonPrintersModule", "expo.modules.printers.RongtaPrintersModule"]
   }
 }
