@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { EpsonPrinters, RongtaPrinters } from "expo-printers-sdk";
 import {
   Button,
   SafeAreaView,
@@ -12,14 +11,15 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
-import type { EpsonPrinterInfo, RongtaPrinterInfo } from "expo-printers-sdk";
+import { EpsonPrinters, RongtaPrinters, StarMicronicsPrinters } from "expo-printers-sdk";
+import type { EpsonPrinterInfo, RongtaPrinterInfo, StarMicronicsPrinterInfo } from "expo-printers-sdk";
 
 type ConnectionType = "USB" | "Bluetooth" | "Network";
 type Manufacturer = "EPSON" | "STAR" | "RONGTA";
 
 type PrinterInfo = {
   type: Manufacturer;
-  info: EpsonPrinterInfo | RongtaPrinterInfo;
+  info: EpsonPrinterInfo | RongtaPrinterInfo | StarMicronicsPrinterInfo;
 };
 
 export default function App() {
@@ -31,52 +31,69 @@ export default function App() {
 
   useEffect(() => {
     // Set up event listeners for all printer types
-    EpsonPrinters.addListener("onPrintersFound", (data: { printers: EpsonPrinterInfo[] }) => {
+    const epsonListener = EpsonPrinters.addListener("onPrintersFound", (data: { printers: EpsonPrinterInfo[] }) => {
+      console.log("Epson printers found:", data.printers.length);
       setPrinters(prev => [...prev, ...data.printers.map(printer => ({ type: "EPSON" as Manufacturer, info: printer }))]);
-      setIsSearching(false); // Stop searching when we get results
+      setIsSearching(false);
     });
 
-    RongtaPrinters.addListener("onPrintersFound", (data: { printers: RongtaPrinterInfo[] }) => {
+    const rongtaListener = RongtaPrinters.addListener("onPrintersFound", (data: { printers: RongtaPrinterInfo[] }) => {
+      console.log("Rongta printers found:", data.printers.length);
       setPrinters(prev => [...prev, ...data.printers.map(printer => ({ type: "RONGTA" as Manufacturer, info: printer }))]);
-      setIsSearching(false); // Stop searching when we get results
+      setIsSearching(false);
+    });
+
+    const starListener = StarMicronicsPrinters.addListener("onPrintersFound", (data: { printers: StarMicronicsPrinterInfo[] }) => {
+      console.log("Star Micronics printers found:", data.printers.length);
+      setPrinters(prev => [...prev, ...data.printers.map(printer => ({ type: "STAR" as Manufacturer, info: printer }))]);
+      setIsSearching(false);
     });
 
     return () => {
-      // Cleanup listeners
-      EpsonPrinters.removeAllListeners("onPrintersFound");
-      RongtaPrinters.removeAllListeners("onPrintersFound");
+      console.log("Cleaning up listeners");
+      epsonListener.remove();
+      rongtaListener.remove();
+      starListener.remove();
     };
   }, []);
 
   const requestPermissions = async () => {
-    if (Platform.OS !== "android") return true;
-
+    console.log("Requesting permissions");
     setIsRequestingPermissions(true);
     try {
-      const permissions = [
-        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-        PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
-        PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-        PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-      ];
+      if (Platform.OS === "android") {
+        const permissions = [
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+          PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+        ].filter(Boolean); // Filter out any undefined permissions
 
-      const results = await PermissionsAndroid.requestMultiple(permissions);
-      console.log("Permission results:", results);
+        if (permissions.length === 0) {
+          // If no permissions are required (e.g., on older Android versions)
+          return true;
+        }
 
-      const allGranted = Object.values(results).every(
-        (result) => result === PermissionsAndroid.RESULTS.GRANTED
-      );
-
-      if (!allGranted) {
-        Alert.alert(
-          "Permissions Required",
-          "Please grant the necessary permissions in your device settings to search for printers."
+        const results = await PermissionsAndroid.requestMultiple(permissions);
+        
+        const allGranted = Object.values(results).every(
+          (result) => result === PermissionsAndroid.RESULTS.GRANTED
         );
-      }
 
-      return allGranted;
-    } catch (err) {
-      console.error("Failed to request permissions:", err);
+        if (!allGranted) {
+          console.log("Permissions not granted");
+          Alert.alert(
+            "Permission Required",
+            "Location and Bluetooth permissions are required to search for printers."
+          );
+          return false;
+        }
+
+        console.log("All permissions granted");
+        return true;
+      }
+      return true;
+    } catch (error) {
+      console.error("Error requesting permissions:", error);
       return false;
     } finally {
       setIsRequestingPermissions(false);
@@ -84,38 +101,32 @@ export default function App() {
   };
 
   const handleSearch = async () => {
-    console.log("handleSearch started");
-    if (isSearching) return;
-
-    const hasPermissions = await requestPermissions();
-    console.log("Permissions result:", hasPermissions);
-    if (!hasPermissions) return;
-
+    console.log("Starting search for", selectedManufacturer, "printers over", selectedConnectionType);
+    setPrinters([]);
     setIsSearching(true);
-    setPrinters([]); // Clear previous results
-
-    console.log("Starting search with params:", {
-      connectionType: selectedConnectionType,
-      manufacturer: selectedManufacturer,
-    });
 
     try {
+      const hasPermissions = await requestPermissions();
+      if (!hasPermissions) {
+        console.log("Permissions denied, stopping search");
+        setIsSearching(false);
+        return;
+      }
+
+      console.log("Searching for printers...");
       if (selectedManufacturer === "EPSON") {
         await EpsonPrinters.findPrinters(selectedConnectionType);
       } else if (selectedManufacturer === "RONGTA") {
         await RongtaPrinters.findPrinters(selectedConnectionType);
+      } else if (selectedManufacturer === "STAR") {
+        await StarMicronicsPrinters.findPrinters(selectedConnectionType);
       }
       console.log("Search completed successfully");
     } catch (error) {
-      console.error("Search failed:", error);
+      console.error("Failed to find printers:", error);
+      Alert.alert("Error", "Failed to find printers. Please try again.");
       setIsSearching(false);
-      Alert.alert("Error", "Failed to search for printers");
     }
-  };
-
-  const handleStopSearch = () => {
-    console.log("handleStopSearch called");
-    setIsSearching(false);
   };
 
   const renderPrinterInfo = (printer: PrinterInfo) => {
@@ -138,8 +149,16 @@ export default function App() {
             <Text>Address: {rongtaInfo.address}</Text>
           </>
         );
-      default:
-        return null;
+      case "STAR":
+        const starInfo = printer.info as StarMicronicsPrinterInfo;
+        return (
+          <>
+            <Text>Device: {starInfo.deviceName}</Text>
+            <Text>Port: {starInfo.portName}</Text>
+            <Text>MAC: {starInfo.macAddress}</Text>
+            <Text>USB Serial: {starInfo.usbSerialNumber}</Text>
+          </>
+        );
     }
   };
 
@@ -197,22 +216,26 @@ export default function App() {
           >
             <Text style={styles.buttonText}>Rongta</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.manufacturerButton,
+              selectedManufacturer === "STAR" && styles.selectedButton,
+            ]}
+            onPress={() => setSelectedManufacturer("STAR")}
+          >
+            <Text style={styles.buttonText}>Star Micronics</Text>
+          </TouchableOpacity>
         </View>
 
         <TouchableOpacity
-          style={[
-            styles.searchButton,
-            (isSearching || isRequestingPermissions) && styles.disabledButton,
-          ]}
-          onPress={isSearching ? handleStopSearch : handleSearch}
+          style={[styles.searchButton, isSearching && styles.disabledButton]}
+          onPress={handleSearch}
           disabled={isSearching || isRequestingPermissions}
         >
-          {isSearching || isRequestingPermissions ? (
+          {isSearching ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.buttonText}>
-              {isSearching ? "Stop Search" : "Search Printers"}
-            </Text>
+            <Text style={styles.buttonText}>Search Printers</Text>
           )}
         </TouchableOpacity>
 
