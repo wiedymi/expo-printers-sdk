@@ -37,7 +37,7 @@ class EpsonPrinter(
         return runCatching {
             printer = EpsPrinter(
                 printerSeries,
-                EpsPrinter.MODEL_ANK,
+                EpsPrinter.LANG_EN,
                 appContext
             )
 
