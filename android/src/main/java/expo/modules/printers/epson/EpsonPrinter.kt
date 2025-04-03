@@ -32,38 +32,38 @@ class EpsonPrinter(
         val printerSeries = EpsonModelCapability.printerSeriesByName(deviceData.deviceName)
         if (printerSeries == EpsonModelCapability.UNKNOWN) return EpsonPrintResult.ErrorUnknown
 
-        var printer: EpsPrinter? = null
-
         return runCatching {
-            printer = EpsPrinter(
+            val epsonPrinter = EpsPrinter(
                 printerSeries,
                 EpsPrinter.LANG_EN,
                 appContext
             )
 
-            printer.addImage(
-                img, 0, 0,
-                img.width,
-                img.height,
-                EpsPrinter.COLOR_1,
-                EpsPrinter.MODE_MONO,
-                EpsPrinter.HALFTONE_THRESHOLD,
-                EpsPrinter.PARAM_DEFAULT.toDouble(),
-                EpsPrinter.COMPRESS_AUTO
-            )
+            with(epsonPrinter) {
+                addImage(
+                    img, 0, 0,
+                    img.width,
+                    img.height,
+                    EpsPrinter.COLOR_1,
+                    EpsPrinter.MODE_MONO,
+                    EpsPrinter.HALFTONE_THRESHOLD,
+                    EpsPrinter.PARAM_DEFAULT.toDouble(),
+                    EpsPrinter.COMPRESS_AUTO
+                )
 
-            printer.addCut(EpsPrinter.CUT_FEED)
+                addCut(EpsPrinter.CUT_FEED)
 
-            printer.connect(deviceData.target, EpsPrinter.PARAM_DEFAULT)
-            printer.sendData(EpsPrinter.PARAM_DEFAULT)
-            printer.setReceiveEventListener(null)
+                connect(deviceData.target, EpsPrinter.PARAM_DEFAULT)
+                sendData(EpsPrinter.PARAM_DEFAULT)
+                setReceiveEventListener(null)
+            }
+
+            epsonPrinter.disconnectSafeWithRetry()
+            epsonPrinter.clearCommandBuffer()
+
+            EpsonPrintResult.Success
         }.fold(
-            onSuccess = {
-                printer?.disconnectSafeWithRetry()
-                printer?.clearCommandBuffer()
-
-                EpsonPrintResult.Success
-            },
+            onSuccess = { it },
             onFailure = { throwable ->
                 when ((throwable as? Epos2Exception)?.errorStatus) {
                     Epos2Exception.ERR_CONNECT,
