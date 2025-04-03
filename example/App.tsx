@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { EpsonPrinters } from "expo-printers-sdk";
 import {
   Button,
@@ -7,52 +7,45 @@ import {
   Text,
   View,
   Alert,
-  Image,
-  TextInput,
   Platform,
   PermissionsAndroid,
+  TouchableOpacity,
+  ActivityIndicator,
 } from "react-native";
 import type { EpsonPrinterInfo } from "expo-printers-sdk/EpsonPrinters.types";
 
-const testImageUrl = "https://placehold.co/250x150.png";
+type ConnectionType = "USB" | "Bluetooth" | "Network";
+type Manufacturer = "EPSON" | "STAR" | "RONGTA";
+
+type PrinterInfo = {
+  type: Manufacturer;
+  info: EpsonPrinterInfo;
+};
 
 export default function App() {
-  const [printers, setPrinters] = useState<EpsonPrinterInfo[]>([]);
-  const [isDiscovering, setIsDiscovering] = useState(false);
-  const [selectedPrinter, setSelectedPrinter] =
-    useState<EpsonPrinterInfo | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [manualIpAddress, setManualIpAddress] = useState("");
+  const [printers, setPrinters] = useState<PrinterInfo[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedConnectionType, setSelectedConnectionType] = useState<ConnectionType>("Network");
+  const [selectedManufacturer, setSelectedManufacturer] = useState<Manufacturer>("EPSON");
+  const [isRequestingPermissions, setIsRequestingPermissions] = useState(false);
 
   useEffect(() => {
-    EpsonPrinters.addListener(
-      "onDiscovery",
-      (printerInfo: EpsonPrinterInfo) => {
-        setPrinters((prev) => [...prev, printerInfo]);
-      }
-    );
-
-    // @ts-ignore
-    EpsonPrinters.addListener("onPrintError", ({ error, code }) => {
-      console.error("onPrintError", { error, code });
-    });
-
-    EpsonPrinters.addListener("onPrintSuccess", () => {
-      console.log("onPrintSuccess");
+    // Set up event listeners for all printer types
+    EpsonPrinters.addListener("onPrintersFound", (data: { printers: EpsonPrinterInfo[] }) => {
+      setPrinters(prev => [...prev, ...data.printers.map(printer => ({ type: "EPSON" as Manufacturer, info: printer }))]);
+      setIsSearching(false); // Stop searching when we get results
     });
 
     return () => {
-      EpsonPrinters.stopDiscovery();
-      if (isConnected) {
-        EpsonPrinters.disconnectPrinter();
-      }
+      // Cleanup listeners
+      EpsonPrinters.removeAllListeners("onPrintersFound");
     };
-  }, [isConnected]);
+  }, []);
 
   const requestPermissions = async () => {
     if (Platform.OS === "android") {
       try {
+        setIsRequestingPermissions(true);
         const permissions = [
           PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
           PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
@@ -61,177 +54,108 @@ export default function App() {
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_ADVERTISE,
           PermissionsAndroid.PERMISSIONS.ACCESS_NETWORK_STATE,
           PermissionsAndroid.PERMISSIONS.INTERNET,
-        ].filter(Boolean); // Filter out any null permissions
+        ].filter(Boolean);
 
-        console.log("permissions", permissions);
+        const results = await PermissionsAndroid.requestMultiple(permissions);
+        console.log("Permission results:", results);
 
-        const results = [];
-        for (const permission of permissions) {
-          const result = await PermissionsAndroid.request(permission);
-          results.push(result);
-        }
-
-        console.log("results", results);
-
-        const allGranted = results.every((result) => result);
+        const allGranted = Object.values(results).every(result => result === PermissionsAndroid.RESULTS.GRANTED);
 
         if (!allGranted) {
           Alert.alert(
             "Permissions Required",
-            "Please grant all permissions to use printer features"
+            "Please grant all permissions in your device settings to search for printers. You can find them in Settings > Apps > Expo Go > Permissions"
           );
         }
 
-        return true;
+        return allGranted;
       } catch (err) {
+        console.error("Error requesting permissions:", err);
+        Alert.alert("Error", "Failed to request permissions. Please try again.");
         return false;
+      } finally {
+        setIsRequestingPermissions(false);
       }
     }
+    return true;
   };
 
-  const handleStartDiscovery = async () => {
+  const handleSearch = async () => {
+    console.log("handleSearch started");
     try {
-      await requestPermissions();
-      setPrinters([]);
-      setIsDiscovering(true);
-      // Start network printer discovery (type 1)
-      await EpsonPrinters.startDiscovery(1);
+      if (isRequestingPermissions) {
+        console.log("Already requesting permissions, please wait...");
+        return;
+      }
+
+      console.log("Requesting permissions...");
+      const hasPermissions = await requestPermissions();
+      console.log("Permissions result:", hasPermissions);
+      if (!hasPermissions) {
+        return;
+      }
+
+      console.log("Starting search with:", { selectedManufacturer, selectedConnectionType });
+      setPrinters([]); // Clear previous results
+      setIsSearching(true); // Start searching
+
+      // Call appropriate search method based on manufacturer and connection type
+      switch (selectedManufacturer) {
+        case "EPSON":
+          console.log("Calling EpsonPrinters.findPrinters");
+          await EpsonPrinters.findPrinters(selectedConnectionType);
+          console.log("EpsonPrinters.findPrinters completed");
+          break;
+        case "STAR":
+          Alert.alert("Not Implemented", "Star Micronics printer discovery is not implemented yet");
+          setIsSearching(false);
+          break;
+        case "RONGTA":
+          Alert.alert("Not Implemented", "Rongta printer discovery is not implemented yet");
+          setIsSearching(false);
+          break;
+      }
     } catch (error) {
       console.error("Failed to start discovery:", error);
+      Alert.alert("Error", "Failed to start printer discovery");
+      setIsSearching(false);
     }
   };
 
-  const handleStopDiscovery = async () => {
-    try {
-      setIsDiscovering(false);
-      await EpsonPrinters.stopDiscovery();
-    } catch (error) {
-      console.error("Failed to stop discovery:", error);
-    }
+  const handleStopSearch = async () => {
+    console.log("handleStopSearch called");
+    setIsSearching(false);
   };
 
-  const handleConnectPrinter = async (printer: EpsonPrinterInfo) => {
-    try {
-      setIsLoading(true);
-      const result = await EpsonPrinters.connectPrinter(printer.target);
-      setIsLoading(false);
-      if (result) {
-        setIsConnected(true);
-        setSelectedPrinter(printer);
-        Alert.alert("Connected", `Connected to ${printer.deviceName}`);
-      }
-    } catch (error) {
-      setIsLoading(false);
-      console.error("Failed to connect to printer:", error);
-      Alert.alert("Connection Error", "Failed to connect to printer");
-    }
-  };
-
-  const handleManualConnect = async () => {
-    if (!manualIpAddress.trim()) {
-      Alert.alert("Error", "Please enter an IP address");
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      // Create a manual printer info object
-      const manualPrinter: EpsonPrinterInfo = {
-        deviceName: `Printer at ${manualIpAddress}`,
-        target: `TCP:${manualIpAddress}`,
-        ip: manualIpAddress,
-        mac: "",
-        bdAddress: "",
-      };
-
-      const result = await EpsonPrinters.connectPrinter(manualPrinter.target);
-      setIsLoading(false);
-
-      if (result) {
-        setIsConnected(true);
-        setSelectedPrinter(manualPrinter);
-        Alert.alert("Connected", `Connected to printer at ${manualIpAddress}`);
-        setManualIpAddress("");
-      }
-    } catch (error) {
-      setIsLoading(false);
-      console.error("Failed to connect to printer:", error);
-      Alert.alert("Connection Error", "Failed to connect to printer");
-    }
-  };
-
-  const handleDisconnectPrinter = async () => {
-    try {
-      setIsLoading(true);
-      const result = await EpsonPrinters.disconnectPrinter();
-      setIsLoading(false);
-      if (result) {
-        setIsConnected(false);
-        setSelectedPrinter(null);
-        Alert.alert("Disconnected", "Printer disconnected successfully");
-      }
-    } catch (error) {
-      setIsLoading(false);
-      console.error("Failed to disconnect printer:", error);
-      Alert.alert("Disconnection Error", "Failed to disconnect printer");
-    }
-  };
-
-  const handlePrintTestText = async () => {
-    if (!isConnected) {
-      Alert.alert("Error", "No printer connected");
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      await EpsonPrinters.printText(
-        "Test Print from Expo Printers\n\nHello World!",
-        {
-          alignment: EpsonPrinters.ALIGN_CENTER,
-          font: EpsonPrinters.FONT_A,
-          lang: EpsonPrinters.LANG_EN,
-        }
-      );
-    } catch (error) {
-      setIsLoading(false);
-      console.error("Failed to print test text:", error);
-    }
-  };
-
-  const handlePrintTestImage = async () => {
-    if (!isConnected) {
-      Alert.alert("Error", "No printer connected");
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      // Convert image to base64
-      const response = await fetch(testImageUrl);
-      const blob = await response.blob();
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          if (typeof reader.result === "string") {
-            // Remove data:image/jpeg;base64, prefix
-            const base64Data = reader.result.split(",")[1];
-            resolve(base64Data);
-          } else {
-            reject(new Error("Failed to convert image to base64"));
-          }
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-
-      await EpsonPrinters.printImage(base64, {
-        alignment: EpsonPrinters.ALIGN_CENTER,
-      });
-    } catch (error) {
-      setIsLoading(false);
-      console.error("Failed to print test image:", error);
-      Alert.alert("Error", "Failed to print test image");
+  const renderPrinterInfo = (printer: PrinterInfo) => {
+    switch (printer.type) {
+      case "EPSON":
+        const epsonInfo = printer.info as EpsonPrinterInfo;
+        return (
+          <>
+            <Text>Device: {epsonInfo.deviceName}</Text>
+            <Text>IP: {epsonInfo.ip}</Text>
+            <Text>MAC: {epsonInfo.mac}</Text>
+          </>
+        );
+      case "STAR":
+        const starInfo = printer.info as StarMicronicsPrinterInfo;
+        return (
+          <>
+            <Text>Device: {starInfo.deviceName}</Text>
+            <Text>IP: {starInfo.ip}</Text>
+            <Text>MAC: {starInfo.mac}</Text>
+          </>
+        );
+      case "RONGTA":
+        const rongtaInfo = printer.info as RongtaPrinterInfo;
+        return (
+          <>
+            <Text>Device: {rongtaInfo.deviceName}</Text>
+            <Text>IP: {rongtaInfo.ip}</Text>
+            <Text>MAC: {rongtaInfo.mac}</Text>
+          </>
+        );
     }
   };
 
@@ -241,94 +165,73 @@ export default function App() {
         <Text style={styles.header}>Printer Discovery</Text>
 
         <View style={styles.group}>
-          <View style={styles.manualConnectContainer}>
-            <Text style={styles.subHeader}>Manual Connection</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter printer IP address"
-              value={manualIpAddress}
-              onChangeText={setManualIpAddress}
-              keyboardType="numeric"
-            />
-            <Button
-              title="Connect Manually"
-              onPress={handleManualConnect}
-              disabled={isLoading || isConnected || !manualIpAddress.trim()}
-            />
+          <Text style={styles.subHeader}>Connection Type</Text>
+          <View style={styles.radioGroup}>
+            {(["USB", "Bluetooth", "Network"] as ConnectionType[]).map((type) => (
+              <TouchableOpacity
+                key={type}
+                style={[styles.radioButton, isSearching && styles.disabled]}
+                onPress={() => !isSearching && setSelectedConnectionType(type)}
+                disabled={isSearching}
+              >
+                <View style={styles.radioCircle}>
+                  {selectedConnectionType === type && <View style={styles.selectedRb} />}
+                </View>
+                <Text style={[styles.radioLabel, isSearching && styles.disabledText]}>{type}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
 
-          <View style={styles.divider} />
+          <Text style={styles.subHeader}>Manufacturer</Text>
+          <View style={styles.radioGroup}>
+            {(["EPSON", "STAR", "RONGTA"] as Manufacturer[]).map((manufacturer) => (
+              <TouchableOpacity
+                key={manufacturer}
+                style={[styles.radioButton, isSearching && styles.disabled]}
+                onPress={() => !isSearching && setSelectedManufacturer(manufacturer)}
+                disabled={isSearching}
+              >
+                <View style={styles.radioCircle}>
+                  {selectedManufacturer === manufacturer && <View style={styles.selectedRb} />}
+                </View>
+                <Text style={[styles.radioLabel, isSearching && styles.disabledText]}>{manufacturer}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
           <Button
-            title={isDiscovering ? "Stop Discovery" : "Start Discovery"}
-            onPress={isDiscovering ? handleStopDiscovery : handleStartDiscovery}
-            disabled={isLoading}
+            title={isSearching ? "Searching..." : isRequestingPermissions ? "Requesting Permissions..." : "Search Printers"}
+            onPress={() => {
+              console.log("Button clicked, isSearching:", isSearching, "isRequestingPermissions:", isRequestingPermissions);
+              if (isSearching) {
+                console.log("Calling handleStopSearch");
+                handleStopSearch();
+              } else {
+                console.log("Calling handleSearch");
+                handleSearch();
+              }
+            }}
+            disabled={isSearching || isRequestingPermissions}
+            color={isSearching || isRequestingPermissions ? "#FFA500" : "#007AFF"}
           />
 
           <Text style={styles.groupHeader}>Found Printers</Text>
 
-          {printers.length === 0 ? (
+          {isSearching ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#000" />
+              <Text style={styles.loadingText}>Searching for printers...</Text>
+            </View>
+          ) : printers.length === 0 ? (
             <Text>No printers found yet...</Text>
           ) : (
-            printers.map((printer) => (
-              <View
-                key={printer.mac || printer.target}
-                style={styles.printerItem}
-              >
-                <View>
-                  <Text>Device: {printer.deviceName}</Text>
-                  <Text>IP: {printer.ip}</Text>
-                  <Text>MAC: {printer.mac}</Text>
-                </View>
-                <Button
-                  title={
-                    selectedPrinter?.target === printer.target
-                      ? "Disconnect"
-                      : "Connect"
-                  }
-                  onPress={
-                    selectedPrinter?.target === printer.target
-                      ? handleDisconnectPrinter
-                      : () => handleConnectPrinter(printer)
-                  }
-                  disabled={isLoading}
-                />
+            printers.map((printer, index) => (
+              <View key={index} style={styles.printerItem}>
+                {renderPrinterInfo(printer)}
               </View>
             ))
           )}
         </View>
-
-        {isConnected && selectedPrinter && (
-          <View style={styles.group}>
-            <Text style={styles.groupHeader}>Connected Printer</Text>
-            <Text>Device: {selectedPrinter.deviceName}</Text>
-            <Text>IP: {selectedPrinter.ip}</Text>
-
-            <View style={styles.testImageContainer}>
-              <Text style={styles.subHeader}>Test Image:</Text>
-            </View>
-
-            <View style={styles.buttonContainer}>
-              <Button
-                title="Print Test Text"
-                onPress={handlePrintTestText}
-                disabled={isLoading}
-              />
-              <Button
-                title="Print Test Image"
-                onPress={handlePrintTestImage}
-                disabled={isLoading}
-              />
-              <Button
-                title="Disconnect"
-                onPress={handleDisconnectPrinter}
-                disabled={isLoading}
-              />
-            </View>
-
-            {isLoading && <Text style={styles.loadingText}>Processing...</Text>}
-          </View>
-        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -359,46 +262,55 @@ const styles = {
     backgroundColor: "#eee",
   },
   printerItem: {
-    flexDirection: "row" as const,
-    justifyContent: "space-between" as const,
-    alignItems: "center" as const,
     marginBottom: 15,
     paddingBottom: 15,
     borderBottomWidth: 1,
     borderBottomColor: "#eee",
   },
-  buttonContainer: {
-    marginTop: 15,
-    gap: 10,
-  },
-  testImageContainer: {
-    marginTop: 20,
+  radioGroup: {
+    flexDirection: "row" as const,
+    flexWrap: "wrap" as const,
     marginBottom: 20,
   },
-  testImage: {
-    width: "100%",
-    height: 200,
-    backgroundColor: "#f0f0f0",
-    borderRadius: 5,
+  radioButton: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    marginRight: 20,
+    marginBottom: 10,
+  },
+  radioCircle: {
+    height: 20,
+    width: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: "#000",
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    marginRight: 8,
+  },
+  selectedRb: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "#000",
+  },
+  radioLabel: {
+    fontSize: 16,
+  },
+  loadingContainer: {
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    padding: 20,
   },
   loadingText: {
     marginTop: 10,
-    textAlign: "center" as const,
+    fontSize: 16,
     color: "#666",
   },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 5,
-    padding: 10,
-    marginBottom: 10,
+  disabled: {
+    opacity: 0.5,
   },
-  manualConnectContainer: {
-    marginBottom: 20,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: "#eee",
-    marginVertical: 20,
+  disabledText: {
+    color: "#999",
   },
 };
