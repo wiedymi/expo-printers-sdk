@@ -23,11 +23,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js for GitHub Packages
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          registry-url: 'https://npm.pkg.github.com/'
           cache: 'npm'
 
       - name: Install dependencies
@@ -39,26 +38,15 @@ jobs:
           echo "Updating package.json to version ${{ github.event.inputs.version }}"
           npm version ${{ github.event.inputs.version }} --no-git-tag-version --allow-same-version
 
-      - name: Check npm user authentication for GHP
-        run: npm whoami --registry=https://npm.pkg.github.com/
+      - name: Check npm user authentication
+        run: npm whoami
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Build Expo Native Module
         run: npm run build
 
-      - name: Publish to GitHub Packages
-        run: npm publish --registry=https://npm.pkg.github.com/
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up Node.js for Public NPM Registry
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-
       - name: Publish to Public NPM Registry
-        run: npm publish --access public --registry=https://registry.npmjs.org/
+        run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
