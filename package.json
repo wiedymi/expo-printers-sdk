@@ -21,7 +21,10 @@
     "expo-printers-sdk",
     "epson"
   ],
-  "repository": "https://github.com/wiedymi/expo-printers-sdk",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wiedymi/expo-printers-sdk.git"
+  },
   "bugs": {
     "url": "https://github.com/wiedymi/expo-printers-sdk/issues"
   },
