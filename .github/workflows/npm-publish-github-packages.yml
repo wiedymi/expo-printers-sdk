@@ -15,19 +15,19 @@ jobs:
   publish:
     name: Build and Publish Packages
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Set up Node.js for Public NPM
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          registry-url: 'https://registry.npmjs.org/'
           cache: 'npm'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Install dependencies
         run: npm ci
@@ -39,14 +39,12 @@ jobs:
           npm version ${{ github.event.inputs.version }} --no-git-tag-version --allow-same-version
 
       - name: Check npm user authentication
+        # No env needed here - .npmrc handles authentication
         run: npm whoami
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Build Expo Native Module
         run: npm run build
 
       - name: Publish to Public NPM Registry
+        # No env needed here - .npmrc handles authentication
         run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
