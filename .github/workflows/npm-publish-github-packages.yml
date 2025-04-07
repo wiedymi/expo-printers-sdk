@@ -39,9 +39,6 @@ jobs:
           echo "Updating package.json to version ${{ github.event.inputs.version }}"
           npm version ${{ github.event.inputs.version }} --no-git-tag-version --allow-same-version
 
-      - name: Check .npmrc configuration
-        run: cat ~/.npmrc # Display the contents of the npm config file
-
       - name: Check npm user authentication for GHP
         run: npm whoami --registry=https://npm.pkg.github.com/
         env:
