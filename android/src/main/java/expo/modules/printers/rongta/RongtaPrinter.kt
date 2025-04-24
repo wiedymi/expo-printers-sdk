@@ -41,10 +41,12 @@ class RongtaPrinter(
                 Log.e(TAG, "failed to configure printer - $deviceData")
             }
 
+        val maxWidth = 560
         val img: Bitmap = runCatching {
             val decodedString = Base64.decode(base64Image, Base64.DEFAULT)
             val inputStream = ByteArrayInputStream(decodedString)
-            BitmapFactory.decodeStream(inputStream)
+            val decodedBitmap = BitmapFactory.decodeStream(inputStream)
+            Bitmap.createScaledBitmap(decodedBitmap, maxWidth, (decodedBitmap.height * maxWidth / decodedBitmap.width), true)
         }.getOrNull() ?: return RongtaPrintResult.ErrorInvalidImage.also {
             Log.e(TAG, "failed to decode image")
         }
