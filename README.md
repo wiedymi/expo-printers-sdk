@@ -1,35 +1,298 @@
 # expo-printers-sdk
 
-My new module
+An Expo (React Native) module for integrating thermal printers from multiple manufacturers into your Expo/React Native applications.
 
-# API documentation
+## Features
 
-- [Documentation for the latest stable release](https://docs.expo.dev/versions/latest/sdk/printers-sdk/)
-- [Documentation for the main branch](https://docs.expo.dev/versions/unversioned/sdk/printers-sdk/)
+- Support for multiple printer manufacturers:
+  - Epson
+  - Rongta
+  - Star Micronics
+- Connect via Bluetooth, Network, or USB
+- Discover available printers
+- Print images to connected printers
+- Event-based communication for printer discovery and print results
 
-# Installation in managed Expo projects
+## Installation
 
-For [managed](https://docs.expo.dev/archive/managed-vs-bare/) Expo projects, please follow the installation instructions in the [API documentation for the latest stable release](#api-documentation). If you follow the link and there is no documentation available then this library is not yet usable within managed projects &mdash; it is likely to be included in an upcoming Expo SDK release.
+#### Add the package to your dependencies
 
-# Installation in bare React Native projects
+```bash
+bunx expo install expo-printers-sdk
+```
+
+## In bare React Native projects
 
 For bare React Native projects, you must ensure that you have [installed and configured the `expo` package](https://docs.expo.dev/bare/installing-expo-modules/) before continuing.
 
-### Add the package to your npm dependencies
+## Platform Support
+- [x] Android
+- [ ] iOS
 
+Note: iOS is not supported yet.
+
+## Configure for Android
+
+No additional configuration is needed for Android.
+
+## Usage
+
+### Importing the modules
+
+```typescript
+import {
+  EpsonPrinters,
+  RongtaPrinters,
+  StarMicronicsPrinters,
+  PrinterConnectionType
+} from 'expo-printers-sdk';
 ```
-npm install expo-printers-sdk
+
+### Discovering printers
+
+#### Epson printers
+
+```typescript
+import { EpsonPrinters, PrinterConnectionType, EpsonPrinterInfo } from 'expo-printers-sdk';
+
+// Add event listener for when printers are found
+EpsonPrinters.addListener('onPrintersFound', (data: { printers: EpsonPrinterInfo[] }) => {
+  console.log('Found Epson printers:', data.printers);
+  // Store or use the printers as needed
+});
+
+// Search for available printers
+const searchResult = await EpsonPrinters.findPrinters('Bluetooth' as PrinterConnectionType);
 ```
 
-### Configure for Android
+#### Rongta printers
 
+```typescript
+import { RongtaPrinters, PrinterConnectionType, RongtaPrinterInfo } from 'expo-printers-sdk';
 
+// Add event listener for when printers are found
+RongtaPrinters.addListener('onPrintersFound', (data: { printers: RongtaPrinterInfo[] }) => {
+  console.log('Found Rongta printers:', data.printers);
+  // Store or use the printers as needed
+});
 
+// Search for available printers
+const searchResult = await RongtaPrinters.findPrinters('Bluetooth' as PrinterConnectionType);
+```
 
-### Configure for iOS
+#### Star Micronics printers
 
-Run `npx pod-install` after installing the npm package.
+```typescript
+import { StarMicronicsPrinters, PrinterConnectionType, StarMicronicsPrinterInfo } from 'expo-printers-sdk';
 
-# Contributing
+// Add event listener for when printers are found
+StarMicronicsPrinters.addListener('onPrintersFound', (data: { printers: StarMicronicsPrinterInfo[] }) => {
+  console.log('Found Star Micronics printers:', data.printers);
+  // Store or use the printers as needed
+});
 
-Contributions are very welcome! Please refer to guidelines described in the [contributing guide]( https://github.com/expo/expo#contributing).
+// Search for available printers
+const searchResult = await StarMicronicsPrinters.findPrinters('Network' as PrinterConnectionType);
+```
+
+### Printing images
+
+#### Epson printers
+
+```typescript
+import { EpsonPrinters, EpsonPrinterInfo, EpsonPrintResult } from 'expo-printers-sdk';
+
+// Add event listener for print results
+EpsonPrinters.addListener('onPrintImage', (result: EpsonPrintResult) => {
+  if (result.success) {
+    console.log('Print succeeded!');
+  } else {
+    console.error('Print failed:', result.error);
+  }
+});
+
+// Print an image to a printer
+const printerInfo: EpsonPrinterInfo = {
+  deviceName: 'TM-T88V',
+  target: 'BT:00:11:22:33:44:55',
+  ip: '',
+  mac: '00:11:22:33:44:55',
+  bdAddress: '00:11:22:33:44:55',
+  connectionType: 'Bluetooth'
+};
+
+// Convert your image to base64
+const base64Image = '...'; // your image in base64 format
+
+const printResult = await EpsonPrinters.printImage(base64Image, printerInfo);
+```
+
+#### Rongta printers
+
+```typescript
+import { RongtaPrinters, RongtaPrinterInfo, RongtaPrintResult } from 'expo-printers-sdk';
+
+// Add event listener for print results
+RongtaPrinters.addListener('onPrintImage', (result: RongtaPrintResult) => {
+  if (result.success) {
+    console.log('Print succeeded!');
+  } else {
+    console.error('Print failed:', result.error);
+  }
+});
+
+// Print an image to a printer
+const printerInfo: RongtaPrinterInfo = {
+  deviceName: 'RPP300',
+  alias: 'Thermal Printer',
+  address: '00:11:22:33:44:55',
+  connectionType: 'Bluetooth'
+};
+
+// Convert your image to base64
+const base64Image = '...'; // your image in base64 format
+
+const printResult = await RongtaPrinters.printImage(base64Image, printerInfo);
+```
+
+#### Star Micronics printers
+
+```typescript
+import { StarMicronicsPrinters, StarMicronicsPrinterInfo, StarMicronicsPrintResult } from 'expo-printers-sdk';
+
+// Add event listener for print results
+StarMicronicsPrinters.addListener('onPrintImage', (result: StarMicronicsPrintResult) => {
+  if (result.success) {
+    console.log('Print succeeded!');
+  } else {
+    console.error('Print failed:', result.error);
+  }
+});
+
+// Print an image to a printer
+const printerInfo: StarMicronicsPrinterInfo = {
+  deviceName: 'TSP100',
+  portName: 'TCP:192.168.1.100',
+  macAddress: '00:11:22:33:44:55',
+  usbSerialNumber: '',
+  connectionType: 'Network'
+};
+
+// Convert your image to base64
+const base64Image = '...'; // your image in base64 format
+
+const printResult = await StarMicronicsPrinters.printImage(base64Image, printerInfo);
+```
+
+## API Reference
+
+### Connection Types
+
+```typescript
+type PrinterConnectionType = 'Bluetooth' | 'Network' | 'USB';
+```
+
+### Epson Printers
+
+#### Types
+
+```typescript
+type EpsonPrinterInfo = {
+  deviceName: string;
+  target: string;
+  ip: string;
+  mac: string;
+  bdAddress: string;
+  connectionType: PrinterConnectionType;
+};
+
+type EpsonPrintResult = {
+  success: boolean;
+  error?: string;
+};
+```
+
+#### Methods
+
+- `findPrinters(connectionType: PrinterConnectionType): Promise<boolean>`
+- `printImage(base64Image: string, deviceData: EpsonPrinterInfo): Promise<boolean>`
+
+#### Events
+
+- `onPrintersFound`: Triggered when printers are discovered
+- `onPrintImage`: Triggered when a print job completes
+
+### Rongta Printers
+
+#### Types
+
+```typescript
+type RongtaPrinterInfo = {
+  deviceName: string;
+  alias: string;
+  address: string;
+  connectionType: PrinterConnectionType;
+};
+
+type RongtaPrintResult = {
+  success: boolean;
+  error?: string;
+};
+```
+
+#### Methods
+
+- `findPrinters(connectionType: PrinterConnectionType): Promise<boolean>`
+- `printImage(base64Image: string, deviceData: RongtaPrinterInfo): Promise<boolean>`
+
+#### Events
+
+- `onPrintersFound`: Triggered when printers are discovered
+- `onPrintImage`: Triggered when a print job completes
+
+### Star Micronics Printers
+
+#### Types
+
+```typescript
+type StarMicronicsPrinterInfo = {
+  deviceName: string;
+  portName: string;
+  macAddress: string;
+  usbSerialNumber: string;
+  connectionType: PrinterConnectionType;
+};
+
+type StarMicronicsPrintResult = {
+  success: boolean;
+  error?: string;
+};
+```
+
+#### Methods
+
+- `findPrinters(connectionType: PrinterConnectionType): Promise<boolean>`
+- `printImage(base64Image: string, deviceData: StarMicronicsPrinterInfo): Promise<boolean>`
+
+#### Events
+
+- `onPrintersFound`: Triggered when printers are discovered
+- `onPrintImage`: Triggered when a print job completes
+
+## Permission Requirements
+
+For Android, your app will need the following permissions in the `AndroidManifest.xml`:
+
+- For Bluetooth: `BLUETOOTH`, `BLUETOOTH_ADMIN`, `BLUETOOTH_CONNECT` (for Android 12+)
+- For Network: `INTERNET`, `ACCESS_NETWORK_STATE`
+- For USB: `USB_PERMISSION`
+
+Make sure to request these permissions at runtime as needed.
+
+## Contributing
+
+Contributions are very welcome!
+
+## License
+
+MIT
