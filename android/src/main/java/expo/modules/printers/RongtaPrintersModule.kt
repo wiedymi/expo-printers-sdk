@@ -47,12 +47,25 @@ class RongtaPrintersModule : Module() {
                 val type = PrinterConnectionType.valueOf(connectionType)
                 coroutineScope.launch(Dispatchers.IO) {
                     val printers = printerFinder?.search(type)?.map { deviceData ->
-                        mapOf(
-                            "deviceName" to deviceData.name,
-                            "alias" to deviceData.alias,
-                            "address" to deviceData.address,
-                            "connectionType" to deviceData.connectionType.name
-                        )
+                        when (deviceData.type) {
+                            is PrinterDeviceData.Rongta.Type.Bluetooth -> mapOf(
+                                "connectionType" to deviceData.connectionType.name,
+                                "type" to mapOf(
+                                    "type" to "BLUETOOTH",
+                                    "alias" to deviceData.type.alias,
+                                    "name" to deviceData.type.name,
+                                    "address" to deviceData.type.address
+                                )
+                            )
+                            is PrinterDeviceData.Rongta.Type.Network -> mapOf(
+                                "connectionType" to deviceData.connectionType.name,
+                                "type" to mapOf(
+                                    "type" to "NETWORK",
+                                    "ipAddress" to deviceData.type.ipAddress,
+                                    "port" to deviceData.type.port
+                                )
+                            )
+                        }
                     } ?: emptyList()
 
                     sendEvent("onPrintersFound", mapOf("printers" to printers))
@@ -70,12 +83,25 @@ class RongtaPrintersModule : Module() {
             }
 
             runCatching {
-                val rongtaDeviceData = PrinterDeviceData.Rongta(
-                    connectionType = PrinterConnectionType.valueOf(deviceData["connectionType"] as String),
-                    alias = deviceData["alias"] as String,
-                    name = deviceData["deviceName"] as String,
-                    address = deviceData["address"] as String
-                )
+                val connectionType = PrinterConnectionType.valueOf(deviceData["connectionType"] as String)
+                val rongtaDeviceData = when (connectionType) {
+                    PrinterConnectionType.Bluetooth -> PrinterDeviceData.Rongta(
+                        connectionType = connectionType,
+                        type = PrinterDeviceData.Rongta.Type.Bluetooth(
+                            alias = deviceData["alias"] as String,
+                            name = deviceData["deviceName"] as String,
+                            address = deviceData["address"] as String
+                        )
+                    )
+                    PrinterConnectionType.Network -> PrinterDeviceData.Rongta(
+                        connectionType = connectionType,
+                        type = PrinterDeviceData.Rongta.Type.Network(
+                            ipAddress = deviceData["address"] as String,
+                            port = (deviceData["port"] as? Number)?.toInt() ?: 9100
+                        )
+                    )
+                    else -> throw IllegalArgumentException("Unsupported connection type: $connectionType")
+                }
 
                 coroutineScope.launch(Dispatchers.IO) {
                     val result = printer?.printImage(base64Image, rongtaDeviceData)

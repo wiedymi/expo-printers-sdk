@@ -1,11 +1,22 @@
 import { PrinterConnectionType } from './commons';
 
 export type RongtaPrinterInfo = {
-  deviceName: string;
-  alias: string;
-  address: string;
   connectionType: PrinterConnectionType;
+  type: RongtaPrinterType;
 };
+
+export type RongtaPrinterType = 
+  | {
+      type: 'BLUETOOTH';
+      alias: string;
+      name: string;
+      address: string;
+    }
+  | {
+      type: 'NETWORK';
+      ipAddress: string;
+      port: number;
+    };
 
 export type RongtaPrintResult = {
   success: boolean;

@@ -24,8 +24,20 @@ sealed class PrinterDeviceData {
 
     data class Rongta(
         override val connectionType: PrinterConnectionType,
-        val alias: String,
-        val name: String,
-        val address: String,
-    ) : PrinterDeviceData()
+        val type: Type,
+    ) : PrinterDeviceData() {
+
+        sealed class Type {
+            data class Bluetooth(
+                val alias: String,
+                val name: String,
+                val address: String,
+            ) : Type()
+
+            data class Network(
+                val ipAddress: String,
+                val port: Int,
+            ) : Type()
+        }
+    }
 }

@@ -9,6 +9,7 @@ import expo.modules.printers.commons.PrinterConnectionType
 import expo.modules.printers.commons.PrinterDeviceData
 import expo.modules.printers.commons.PrinterFinder
 import expo.modules.printers.rongta.bluetooth.RongtaBluetoothScanner
+import expo.modules.printers.rongta.network.RongtaNetworkScanner
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.toSet
 
@@ -17,13 +18,14 @@ class RongtaFinder(
 ) : PrinterFinder<PrinterDeviceData.Rongta> {
 
     private val bluetoothScanner = RongtaBluetoothScanner(appContext)
+    private val networkScanner = RongtaNetworkScanner()
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     override suspend fun search(connectionType: PrinterConnectionType): List<PrinterDeviceData.Rongta> =
         coroutineScope {
             when (connectionType) {
                 PrinterConnectionType.Bluetooth -> searchBlueToothPrinters()
-                PrinterConnectionType.Network -> emptyList() // TODO: Implement network scanning
+                PrinterConnectionType.Network -> searchNetworkPrinters()
                 PrinterConnectionType.USB -> emptyList() // TODO: Implement USB scanning
             }
         }
@@ -41,15 +43,35 @@ class RongtaFinder(
                     }
                     PrinterDeviceData.Rongta(
                         connectionType = PrinterConnectionType.Bluetooth,
-                        alias = alias,
-                        name = btDevice.name.orEmpty(),
-                        address = btDevice.address.orEmpty(),
+                        type = PrinterDeviceData.Rongta.Type.Bluetooth(
+                            alias = alias,
+                            name = btDevice.name.orEmpty(),
+                            address = btDevice.address.orEmpty(),
+                        ),
                     )
                 }
         }.onFailure { throwable ->
             Log.e(TAG, "Rongta bluetooth scanning failed", throwable)
         }
             .getOrDefault(emptyList())
+    }
+
+    private suspend fun searchNetworkPrinters(): List<PrinterDeviceData.Rongta> {
+        return runCatching {
+            networkScanner.scan().toSet().toList()
+                .map { device ->
+                    PrinterDeviceData.Rongta(
+                        connectionType = PrinterConnectionType.Network,
+                        type = PrinterDeviceData.Rongta.Type.Network(
+                            ipAddress = device.deviceIp,
+                            port = device.devicePort,
+                        )
+                    )
+                 }
+        }.onFailure { throwable ->
+            Log.e(TAG, "Rongta network scanning failed", throwable)
+        }
+        .getOrDefault(emptyList())
     }
 
     companion object {
