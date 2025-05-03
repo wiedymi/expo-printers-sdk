@@ -10,12 +10,14 @@ import expo.modules.printers.commons.PrinterConnectionType
 import expo.modules.printers.commons.PrinterDeviceData
 import expo.modules.printers.rongta.bluetooth.getBluetoothAdapter
 import com.rt.printerlibrary.bean.BluetoothEdrConfigBean
+import com.rt.printerlibrary.bean.WiFiConfigBean
 import com.rt.printerlibrary.cmd.EscFactory
 import com.rt.printerlibrary.enumerate.BmpPrintMode
 import com.rt.printerlibrary.enumerate.CommonEnum
 import com.rt.printerlibrary.enumerate.ConnectStateEnum
 import com.rt.printerlibrary.enumerate.PageLengthEnum
 import com.rt.printerlibrary.factory.connect.BluetoothFactory
+import com.rt.printerlibrary.factory.connect.WiFiFactory
 import com.rt.printerlibrary.factory.printer.ThermalPrinterFactory
 import com.rt.printerlibrary.setting.BitmapSetting
 import com.rt.printerlibrary.setting.CommonSetting
@@ -136,14 +138,13 @@ class RongtaPrinter(
         deviceData: PrinterDeviceData.Rongta
     ): PrinterConfigBean? {
         Log.i(TAG, "configuring printer - $deviceData")
-        return when (deviceData.connectionType) {
-            PrinterConnectionType.Bluetooth -> configureBTPrinter(deviceData)
-            PrinterConnectionType.Network -> null // TODO: Not supported yet
-            PrinterConnectionType.USB -> null // TODO: Not supported yet
+        return when (deviceData.type) {
+            is PrinterDeviceData.Rongta.Type.Bluetooth -> configureBTPrinter(deviceData.type)
+            is PrinterDeviceData.Rongta.Type.Network -> configureNetworkPrinter(deviceData.type)
         }
     }
 
-    private fun configureBTPrinter(deviceData: PrinterDeviceData.Rongta): PrinterConfigBean? {
+    private fun configureBTPrinter(deviceData: PrinterDeviceData.Rongta.Type.Bluetooth): PrinterConfigBean? {
         val btAdapter = appContext.getBluetoothAdapter() ?: return null.also {
             Log.e(TAG, "failed to get bluetooth adapter")
         }
@@ -152,6 +153,19 @@ class RongtaPrinter(
         val configBean = BluetoothEdrConfigBean(device)
         val btFactory = BluetoothFactory()
         val printerInterface = btFactory.create()
+        printerInterface.configObject = configBean
+        printer.setPrinterInterface(printerInterface)
+
+        return configBean
+    }
+
+    private fun configureNetworkPrinter(deviceData: PrinterDeviceData.Rongta.Type.Network): PrinterConfigBean? {
+        val configBean = WiFiConfigBean(
+            deviceData.ipAddress,
+            deviceData.port
+        )
+        val wiFiFactory = WiFiFactory()
+        val printerInterface = wiFiFactory.create()
         printerInterface.configObject = configBean
         printer.setPrinterInterface(printerInterface)
 
