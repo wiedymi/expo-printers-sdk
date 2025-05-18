@@ -1010,6 +1010,10 @@ object StarModelCapability {
         return mModelCapabilityMap[model].defaultPortSettings
     }
 
+    fun getPaperSize(model: Int): Int {
+        return mModelCapabilityMap[model].defaultPaperSize
+    }
+
     fun canSetDrawerOpenStatus(model: Int): Boolean {
         return mModelCapabilityMap[model].canSetDrawerOpenStatus
     }
