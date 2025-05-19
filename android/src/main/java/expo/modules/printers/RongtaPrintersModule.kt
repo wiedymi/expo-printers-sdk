@@ -89,14 +89,14 @@ class RongtaPrintersModule : Module() {
                         connectionType = connectionType,
                         type = PrinterDeviceData.Rongta.Type.Bluetooth(
                             alias = deviceData["alias"] as String,
-                            name = deviceData["deviceName"] as String,
+                            name = deviceData["name"] as String,
                             address = deviceData["address"] as String
                         )
                     )
                     PrinterConnectionType.Network -> PrinterDeviceData.Rongta(
                         connectionType = connectionType,
                         type = PrinterDeviceData.Rongta.Type.Network(
-                            ipAddress = deviceData["address"] as String,
+                            ipAddress = deviceData["ipAddress"] as String,
                             port = (deviceData["port"] as? Number)?.toInt() ?: 9100
                         )
                     )

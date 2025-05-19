@@ -11,6 +11,7 @@ import expo.modules.printers.commons.PrinterDeviceData
 import expo.modules.printers.starmicronics.internals.StarModelCapability
 import com.starmicronics.stario.StarIOPort
 import com.starmicronics.stario.StarPrinterStatus
+import com.starmicronics.starioextension.ICommandBuilder
 import com.starmicronics.starioextension.ICommandBuilder.CutPaperAction
 import com.starmicronics.starioextension.StarIoExt
 import kotlinx.coroutines.coroutineScope
@@ -39,6 +40,7 @@ class StarMicronicsPinter(
         }
 
         val portSettings = StarModelCapability.getPortSettings(modelIndex)
+        val paperSize = StarModelCapability.getPaperSize(modelIndex)
         // --- Bluetooth ---
         // It can communicate with device name(Ex.BT:Star Micronics) using bluetooth.
         // If used Mac Address(Ex. BT:00:12:3f:XX:XX:XX) at Bluetooth, can choose destination target.
@@ -54,6 +56,7 @@ class StarMicronicsPinter(
             emulation = emulation,
             portName = portName,
             portSettings = portSettings,
+            paperSize = paperSize,
         )
     }
 
@@ -61,21 +64,30 @@ class StarMicronicsPinter(
         base64Image: String,
         emulation: StarIoExt.Emulation,
         portName: String,
-        portSettings: String
+        portSettings: String,
+        paperSize: Int,
     ): StarMicronicsPrintResult {
         val builder = StarIoExt.createCommandBuilder(emulation)
 
         builder.beginDocument()
 
-        val maxWidth = 560
         val img: Bitmap = runCatching {
             val decodedString = Base64.decode(base64Image, Base64.DEFAULT)
             val inputStream = ByteArrayInputStream(decodedString)
             val decodedBitmap = BitmapFactory.decodeStream(inputStream)
-            Bitmap.createScaledBitmap(decodedBitmap, maxWidth, (decodedBitmap.height * maxWidth / decodedBitmap.width), true)
+
+            val ratio = paperSize.toFloat() / decodedBitmap.width
+            val targetHeight = (decodedBitmap.height * ratio).toInt()
+            Bitmap.createScaledBitmap(decodedBitmap, paperSize, targetHeight, true)
         }.getOrNull() ?: return StarMicronicsPrintResult.ErrorInvalidImage
 
-        builder.appendBitmap(img, false)
+        builder.appendBitmap(
+            img,
+            false,      // diffusion (true = dithering, better for photos)
+            paperSize,  // width in printer dots
+            true,       // bothScale = preserve aspect ratio
+            ICommandBuilder.BitmapConverterRotation.Normal
+        )
 
         builder.appendCutPaper(CutPaperAction.PartialCutWithFeed)
 
