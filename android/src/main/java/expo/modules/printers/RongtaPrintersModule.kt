@@ -88,16 +88,16 @@ class RongtaPrintersModule : Module() {
                     PrinterConnectionType.Bluetooth -> PrinterDeviceData.Rongta(
                         connectionType = connectionType,
                         type = PrinterDeviceData.Rongta.Type.Bluetooth(
-                            alias = deviceData["alias"] as String,
-                            name = deviceData["name"] as String,
-                            address = deviceData["address"] as String
+                            alias = deviceData["type.alias"] as String,
+                            name = deviceData["type.name"] as String,
+                            address = deviceData["type.address"] as String
                         )
                     )
                     PrinterConnectionType.Network -> PrinterDeviceData.Rongta(
                         connectionType = connectionType,
                         type = PrinterDeviceData.Rongta.Type.Network(
-                            ipAddress = deviceData["ipAddress"] as String,
-                            port = (deviceData["port"] as? Number)?.toInt() ?: 9100
+                            ipAddress = deviceData["type.ipAddress"] as String,
+                            port = (deviceData["type.port"] as? Number)?.toInt() ?: 9100
                         )
                     )
                     else -> throw IllegalArgumentException("Unsupported connection type: $connectionType")
