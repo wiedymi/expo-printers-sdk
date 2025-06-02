@@ -50,8 +50,8 @@ class EpsonPrintersModule : Module() {
                         mapOf(
                             "deviceName" to deviceData.deviceName,
                             "target" to deviceData.target,
-                            "ip" to deviceData.ipAddress,
-                            "mac" to deviceData.macAddress,
+                            "ipAddress" to deviceData.ipAddress,
+                            "macAddress" to deviceData.macAddress,
                             "bdAddress" to deviceData.bdAddress,
                             "connectionType" to deviceData.connectionType.name
                         )
@@ -85,7 +85,7 @@ class EpsonPrintersModule : Module() {
                 coroutineScope.launch(Dispatchers.IO) {
                     val result = printer?.printImage(base64Image, epsonDeviceData)
                     val success = result == EpsonPrintResult.Success
-                    
+
                     sendEvent("onPrintImage", mapOf(
                         "success" to success,
                         "error" to when (result) {
@@ -109,4 +109,3 @@ class EpsonPrintersModule : Module() {
         }
     }
 }
-                         
