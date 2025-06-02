@@ -4,3 +4,4 @@ export { default as RongtaPrinters } from "./RongtaPrintersModule";
 export * from "./RongtaPrinters.types";
 export { default as StarMicronicsPrinters } from "./StarMicronicsPrintersModule";
 export * from "./StarMicronicsPrinters.types";
+export * from "./commons";

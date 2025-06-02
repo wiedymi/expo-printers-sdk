@@ -1,19 +1,19 @@
-import { PrinterConnectionType } from './commons';
+import type { PrinterConnectionType } from "./commons";
 
 export type RongtaPrinterInfo = {
   connectionType: PrinterConnectionType;
   type: RongtaPrinterType;
 };
 
-export type RongtaPrinterType = 
+export type RongtaPrinterType =
   | {
-      type: 'BLUETOOTH';
+      type: "BLUETOOTH";
       alias: string;
       name: string;
       address: string;
     }
   | {
-      type: 'NETWORK';
+      type: "NETWORK";
       ipAddress: string;
       port: number;
     };
@@ -26,4 +26,4 @@ export type RongtaPrintResult = {
 export type RongtaPrintersModuleEvents = {
   onPrintersFound: (data: { printers: RongtaPrinterInfo[] }) => void;
   onPrintImage: (result: RongtaPrintResult) => void;
-}; 
+};

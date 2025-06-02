@@ -1,1 +1,1 @@
-export type PrinterConnectionType = 'Bluetooth' | 'Network' | 'USB'; 
+export type PrinterConnectionType = "Bluetooth" | "Network" | "USB";

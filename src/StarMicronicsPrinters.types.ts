@@ -1,4 +1,4 @@
-import { PrinterConnectionType } from './commons';
+import type { PrinterConnectionType } from "./commons";
 
 export type StarMicronicsPrinterInfo = {
   deviceName: string;
@@ -16,4 +16,4 @@ export type StarMicronicsPrintResult = {
 export type StarMicronicsPrintersModuleEvents = {
   onPrintersFound: (data: { printers: StarMicronicsPrinterInfo[] }) => void;
   onPrintImage: (result: StarMicronicsPrintResult) => void;
-}; 
+};

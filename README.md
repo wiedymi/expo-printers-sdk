@@ -45,7 +45,7 @@ import {
   RongtaPrinters,
   StarMicronicsPrinters,
   PrinterConnectionType
-} from 'expo-printers-sdk';
+} from "expo-printers-sdk";
 ```
 
 ### Discovering printers
@@ -56,13 +56,13 @@ import {
 import { EpsonPrinters, PrinterConnectionType, EpsonPrinterInfo } from 'expo-printers-sdk';
 
 // Add event listener for when printers are found
-EpsonPrinters.addListener('onPrintersFound', (data: { printers: EpsonPrinterInfo[] }) => {
-  console.log('Found Epson printers:', data.printers);
+EpsonPrinters.addListener("onPrintersFound", (data: { printers: EpsonPrinterInfo[] }) => {
+  console.log("Found Epson printers:", data.printers);
   // Store or use the printers as needed
 });
 
 // Search for available printers
-const searchResult = await EpsonPrinters.findPrinters('Bluetooth' as PrinterConnectionType);
+const searchResult = await EpsonPrinters.findPrinters("Bluetooth" as PrinterConnectionType);
 ```
 
 #### Rongta printers
@@ -71,13 +71,13 @@ const searchResult = await EpsonPrinters.findPrinters('Bluetooth' as PrinterConn
 import { RongtaPrinters, PrinterConnectionType, RongtaPrinterInfo } from 'expo-printers-sdk';
 
 // Add event listener for when printers are found
-RongtaPrinters.addListener('onPrintersFound', (data: { printers: RongtaPrinterInfo[] }) => {
-  console.log('Found Rongta printers:', data.printers);
+RongtaPrinters.addListener("onPrintersFound", (data: { printers: RongtaPrinterInfo[] }) => {
+  console.log("Found Rongta printers:", data.printers);
   // Store or use the printers as needed
 });
 
 // Search for available printers
-const searchResult = await RongtaPrinters.findPrinters('Bluetooth' as PrinterConnectionType);
+const searchResult = await RongtaPrinters.findPrinters("Bluetooth" as PrinterConnectionType);
 ```
 
 #### Star Micronics printers
@@ -86,13 +86,13 @@ const searchResult = await RongtaPrinters.findPrinters('Bluetooth' as PrinterCon
 import { StarMicronicsPrinters, PrinterConnectionType, StarMicronicsPrinterInfo } from 'expo-printers-sdk';
 
 // Add event listener for when printers are found
-StarMicronicsPrinters.addListener('onPrintersFound', (data: { printers: StarMicronicsPrinterInfo[] }) => {
-  console.log('Found Star Micronics printers:', data.printers);
+StarMicronicsPrinters.addListener("onPrintersFound", (data: { printers: StarMicronicsPrinterInfo[] }) => {
+  console.log("Found Star Micronics printers:", data.printers);
   // Store or use the printers as needed
 });
 
 // Search for available printers
-const searchResult = await StarMicronicsPrinters.findPrinters('Network' as PrinterConnectionType);
+const searchResult = await StarMicronicsPrinters.findPrinters("Network" as PrinterConnectionType);
 ```
 
 ### Printing images
@@ -103,26 +103,27 @@ const searchResult = await StarMicronicsPrinters.findPrinters('Network' as Print
 import { EpsonPrinters, EpsonPrinterInfo, EpsonPrintResult } from 'expo-printers-sdk';
 
 // Add event listener for print results
-EpsonPrinters.addListener('onPrintImage', (result: EpsonPrintResult) => {
+EpsonPrinters.addListener("onPrintImage", (result: EpsonPrintResult) => {
   if (result.success) {
-    console.log('Print succeeded!');
+    console.log("Print succeeded!");
   } else {
-    console.error('Print failed:', result.error);
+    console.error("Print failed:", result.error);
   }
 });
 
 // Print an image to a printer
 const printerInfo: EpsonPrinterInfo = {
-  deviceName: 'TM-T88V',
-  target: 'BT:00:11:22:33:44:55',
-  ip: '',
-  mac: '00:11:22:33:44:55',
-  bdAddress: '00:11:22:33:44:55',
-  connectionType: 'Bluetooth'
+  deviceName: "TM-T88V",
+  target: "BT:00:11:22:33:44:55",
+  ipAddress: "",
+  macAddress: "00:11:22:33:44:55",
+  bdAddress: "00:11:22:33:44:55",
+  connectionType: "Bluetooth",
+  deviceType: 0
 };
 
 // Convert your image to base64
-const base64Image = '...'; // your image in base64 format
+const base64Image = "..."; // your image in base64 format
 
 const printResult = await EpsonPrinters.printImage(base64Image, printerInfo);
 ```
@@ -133,26 +134,39 @@ const printResult = await EpsonPrinters.printImage(base64Image, printerInfo);
 import { RongtaPrinters, RongtaPrinterInfo, RongtaPrintResult } from 'expo-printers-sdk';
 
 // Add event listener for print results
-RongtaPrinters.addListener('onPrintImage', (result: RongtaPrintResult) => {
+RongtaPrinters.addListener("onPrintImage", (result: RongtaPrintResult) => {
   if (result.success) {
-    console.log('Print succeeded!');
+    console.log("Print succeeded!");
   } else {
-    console.error('Print failed:', result.error);
+    console.error("Print failed:", result.error);
   }
 });
 
-// Print an image to a printer
-const printerInfo: RongtaPrinterInfo = {
-  deviceName: 'RPP300',
-  alias: 'Thermal Printer',
-  address: '00:11:22:33:44:55',
-  connectionType: 'Bluetooth'
+// Print an image to a Bluetooth printer
+const bluetoothPrinterInfo: RongtaPrinterInfo = {
+  connectionType: "Bluetooth",
+  type: {
+    type: "BLUETOOTH",
+    alias: "Thermal Printer",
+    name: "RPP300",
+    address: "00:11:22:33:44:55"
+  }
+};
+
+// Print an image to a Network printer
+const networkPrinterInfo: RongtaPrinterInfo = {
+  connectionType: "Network",
+  type: {
+    type: "NETWORK",
+    ipAddress: "192.168.1.100",
+    port: 9100
+  }
 };
 
 // Convert your image to base64
 const base64Image = '...'; // your image in base64 format
 
-const printResult = await RongtaPrinters.printImage(base64Image, printerInfo);
+const printResult = await RongtaPrinters.printImage(base64Image, bluetoothPrinterInfo);
 ```
 
 #### Star Micronics printers
@@ -161,21 +175,21 @@ const printResult = await RongtaPrinters.printImage(base64Image, printerInfo);
 import { StarMicronicsPrinters, StarMicronicsPrinterInfo, StarMicronicsPrintResult } from 'expo-printers-sdk';
 
 // Add event listener for print results
-StarMicronicsPrinters.addListener('onPrintImage', (result: StarMicronicsPrintResult) => {
+StarMicronicsPrinters.addListener("onPrintImage", (result: StarMicronicsPrintResult) => {
   if (result.success) {
-    console.log('Print succeeded!');
+    console.log("Print succeeded!");
   } else {
-    console.error('Print failed:', result.error);
+    console.error("Print failed:", result.error);
   }
 });
 
 // Print an image to a printer
 const printerInfo: StarMicronicsPrinterInfo = {
-  deviceName: 'TSP100',
-  portName: 'TCP:192.168.1.100',
-  macAddress: '00:11:22:33:44:55',
-  usbSerialNumber: '',
-  connectionType: 'Network'
+  deviceName: "TSP100",
+  portName: "TCP:192.168.1.100",
+  macAddress: "00:11:22:33:44:55",
+  usbSerialNumber: "",
+  connectionType: "Network"
 };
 
 // Convert your image to base64
@@ -189,7 +203,7 @@ const printResult = await StarMicronicsPrinters.printImage(base64Image, printerI
 ### Connection Types
 
 ```typescript
-type PrinterConnectionType = 'Bluetooth' | 'Network' | 'USB';
+type PrinterConnectionType = "Bluetooth" | "Network" | "USB";
 ```
 
 ### Epson Printers
@@ -200,10 +214,11 @@ type PrinterConnectionType = 'Bluetooth' | 'Network' | 'USB';
 type EpsonPrinterInfo = {
   deviceName: string;
   target: string;
-  ip: string;
-  mac: string;
+  ipAddress: string;
+  macAddress: string;
   bdAddress: string;
   connectionType: PrinterConnectionType;
+  deviceType: number;
 };
 
 type EpsonPrintResult = {
@@ -228,11 +243,22 @@ type EpsonPrintResult = {
 
 ```typescript
 type RongtaPrinterInfo = {
-  deviceName: string;
-  alias: string;
-  address: string;
   connectionType: PrinterConnectionType;
+  type: RongtaPrinterType;
 };
+
+type RongtaPrinterType = 
+  | {
+      type: "BLUETOOTH";
+      alias: string;
+      name: string;
+      address: string;
+    }
+  | {
+      type: "NETWORK";
+      ipAddress: string;
+      port: number;
+    };
 
 type RongtaPrintResult = {
   success: boolean;

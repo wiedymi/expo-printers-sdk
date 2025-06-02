@@ -1,12 +1,13 @@
-import { PrinterConnectionType } from './commons';
+import type { PrinterConnectionType } from "./commons";
 
 export type EpsonPrinterInfo = {
   deviceName: string;
   target: string;
-  ip: string;
-  mac: string;
+  ipAddress: string;
+  macAddress: string;
   bdAddress: string;
   connectionType: PrinterConnectionType;
+  deviceType: number;
 };
 
 export type EpsonPrintResult = {
