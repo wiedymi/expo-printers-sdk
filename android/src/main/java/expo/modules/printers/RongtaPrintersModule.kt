@@ -84,20 +84,21 @@ class RongtaPrintersModule : Module() {
 
             runCatching {
                 val connectionType = PrinterConnectionType.valueOf(deviceData["connectionType"] as String)
+                val typeData = deviceData["type"] as Map<String, Any>
                 val rongtaDeviceData = when (connectionType) {
                     PrinterConnectionType.Bluetooth -> PrinterDeviceData.Rongta(
                         connectionType = connectionType,
                         type = PrinterDeviceData.Rongta.Type.Bluetooth(
-                            alias = deviceData["type.alias"] as String,
-                            name = deviceData["type.name"] as String,
-                            address = deviceData["type.address"] as String
+                            alias = typeData["alias"] as String,
+                            name = typeData["name"] as String,
+                            address = typeData["address"] as String
                         )
                     )
                     PrinterConnectionType.Network -> PrinterDeviceData.Rongta(
                         connectionType = connectionType,
                         type = PrinterDeviceData.Rongta.Type.Network(
-                            ipAddress = deviceData["type.ipAddress"] as String,
-                            port = (deviceData["type.port"] as? Number)?.toInt() ?: 9100
+                            ipAddress = typeData["ipAddress"] as String,
+                            port = (typeData["port"] as? Number)?.toInt() ?: 9100
                         )
                     )
                     else -> throw IllegalArgumentException("Unsupported connection type: $connectionType")
