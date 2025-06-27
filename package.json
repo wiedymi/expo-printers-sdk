@@ -1,6 +1,6 @@
 {
   "name": "expo-printers-sdk",
-  "version": "0.1.0",
+  "version": "0.8.0",
   "description": "My new module",
   "main": "build/index.js",
   "types": "build/index.d.ts",

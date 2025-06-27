@@ -6,6 +6,10 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.printers.commons.PrinterConnectionType
 import expo.modules.printers.commons.PrinterDeviceData
+import expo.modules.printers.commons.safeGetInt
+import expo.modules.printers.commons.safeGetString
+import expo.modules.printers.commons.safeGetStringOrDefault
+import expo.modules.printers.commons.toPrinterConnectionType
 import expo.modules.printers.epson.EpsonPrinter
 import expo.modules.printers.epson.EpsonPrinterFinder
 import expo.modules.printers.epson.EpsonPrintResult
@@ -39,12 +43,13 @@ class EpsonPrintersModule : Module() {
         }
 
         AsyncFunction("findPrinters") { connectionType: String ->
-            if (context == null) {
-                return@AsyncFunction emptyList<Map<String, Any>>()
-            }
-
             runCatching {
-                val type = PrinterConnectionType.valueOf(connectionType)
+                val type = try {
+                    connectionType.toPrinterConnectionType()
+                } catch (e: IllegalArgumentException) {
+                    Log.e(TAG, "Invalid connection type: $connectionType", e)
+                    return@AsyncFunction false
+                }
                 coroutineScope.launch(Dispatchers.IO) {
                     val printers = printerFinder?.search(type)?.map { deviceData ->
                         mapOf(
@@ -53,7 +58,8 @@ class EpsonPrintersModule : Module() {
                             "ipAddress" to deviceData.ipAddress,
                             "macAddress" to deviceData.macAddress,
                             "bdAddress" to deviceData.bdAddress,
-                            "connectionType" to deviceData.connectionType.name
+                            "connectionType" to deviceData.connectionType.name,
+                            "deviceType" to deviceData.deviceType
                         )
                     } ?: emptyList()
 
@@ -62,8 +68,7 @@ class EpsonPrintersModule : Module() {
                 true
             }.onFailure { e ->
                 Log.e(TAG, "Failed to find printers", e)
-                false
-            }.getOrNull() ?: false
+            }.getOrElse { false }
         }
 
         AsyncFunction("printImage") { base64Image: String, deviceData: Map<String, Any> ->
@@ -72,14 +77,18 @@ class EpsonPrintersModule : Module() {
             }
 
             runCatching {
+                // Safe data extraction with utility functions
+                val connectionType = deviceData.safeGetString("connectionType").toPrinterConnectionType()
+                val deviceType = deviceData.safeGetInt("deviceType")
+
                 val epsonDeviceData = PrinterDeviceData.EPSON(
-                    connectionType = PrinterConnectionType.valueOf(deviceData["connectionType"] as String),
-                    deviceType = deviceData["deviceType"] as Int,
-                    target = deviceData["target"] as String,
-                    deviceName = deviceData["deviceName"] as String,
-                    ipAddress = deviceData["ipAddress"] as String,
-                    macAddress = deviceData["macAddress"] as String,
-                    bdAddress = deviceData["bdAddress"] as String
+                    connectionType = connectionType,
+                    deviceType = deviceType,
+                    target = deviceData.safeGetStringOrDefault("target"),
+                    deviceName = deviceData.safeGetStringOrDefault("deviceName"),
+                    ipAddress = deviceData.safeGetStringOrDefault("ipAddress"),
+                    macAddress = deviceData.safeGetStringOrDefault("macAddress"),
+                    bdAddress = deviceData.safeGetStringOrDefault("bdAddress")
                 )
 
                 coroutineScope.launch(Dispatchers.IO) {
@@ -104,8 +113,7 @@ class EpsonPrintersModule : Module() {
                     "success" to false,
                     "error" to (e.localizedMessage ?: "Unknown error during printing")
                 ))
-                false
-            }.getOrNull() ?: false
+            }.getOrElse { false }
         }
     }
 }

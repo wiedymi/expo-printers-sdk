@@ -18,7 +18,7 @@ import kotlinx.coroutines.coroutineScope
 import java.io.ByteArrayInputStream
 import kotlin.time.Duration.Companion.seconds
 
-class StarMicronicsPinter(
+class StarMicronicsPrinter(
     private val appContext: Context,
 ) : Printer<PrinterDeviceData.Star, StarMicronicsPrintResult> {
 
@@ -149,7 +149,7 @@ class StarMicronicsPinter(
             runCatching {
                 StarIOPort.releasePort(port)
             }.onFailure { throwable ->
-                Log.e("StarMicronicsPinter", "failed to release printer port, error - $throwable")
+                Log.e("StarMicronicsPrinter", "failed to release printer port, error - $throwable")
             }
         }
 

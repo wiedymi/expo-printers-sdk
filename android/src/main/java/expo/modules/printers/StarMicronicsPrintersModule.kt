@@ -6,7 +6,10 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.printers.commons.PrinterConnectionType
 import expo.modules.printers.commons.PrinterDeviceData
-import expo.modules.printers.starmicronics.StarMicronicsPinter
+import expo.modules.printers.commons.safeGetString
+import expo.modules.printers.commons.safeGetStringOrDefault
+import expo.modules.printers.commons.toPrinterConnectionType
+import expo.modules.printers.starmicronics.StarMicronicsPrinter
 import expo.modules.printers.starmicronics.StarMicronicsFinder
 import expo.modules.printers.starmicronics.StarMicronicsPrintResult
 import kotlinx.coroutines.CoroutineScope
@@ -16,7 +19,7 @@ import kotlinx.coroutines.withContext
 
 class StarMicronicsPrintersModule : Module() {
     private val TAG = "StarMicronicsPrintersModule"
-    private var printer: StarMicronicsPinter? = null
+    private var printer: StarMicronicsPrinter? = null
     private var printerFinder: StarMicronicsFinder? = null
     private val coroutineScope = CoroutineScope(Dispatchers.Main)
 
@@ -29,7 +32,7 @@ class StarMicronicsPrintersModule : Module() {
         Events("onPrintersFound", "onPrintImage")
 
         OnCreate {
-            printer = StarMicronicsPinter(context)
+            printer = StarMicronicsPrinter(context)
             printerFinder = StarMicronicsFinder(context)
         }
 
@@ -39,12 +42,13 @@ class StarMicronicsPrintersModule : Module() {
         }
 
         AsyncFunction("findPrinters") { connectionType: String ->
-            if (context == null) {
-                return@AsyncFunction emptyList<Map<String, Any>>()
-            }
-
             runCatching {
-                val type = PrinterConnectionType.valueOf(connectionType)
+                val type = try {
+                    connectionType.toPrinterConnectionType()
+                } catch (e: IllegalArgumentException) {
+                    Log.e(TAG, "Invalid connection type: $connectionType", e)
+                    return@AsyncFunction false
+                }
                 coroutineScope.launch(Dispatchers.IO) {
                     val printers = printerFinder?.search(type)?.map { deviceData ->
                         mapOf(
@@ -61,8 +65,7 @@ class StarMicronicsPrintersModule : Module() {
                 true
             }.onFailure { e ->
                 Log.e(TAG, "Failed to find printers", e)
-                false
-            }.getOrNull() ?: false
+            }.getOrElse { false }
         }
 
         AsyncFunction("printImage") { base64Image: String, deviceData: Map<String, Any> ->
@@ -71,12 +74,15 @@ class StarMicronicsPrintersModule : Module() {
             }
 
             runCatching {
+                // Safe data extraction with utility functions
+                val connectionType = deviceData.safeGetString("connectionType").toPrinterConnectionType()
+
                 val starDeviceData = PrinterDeviceData.Star(
-                    connectionType = PrinterConnectionType.valueOf(deviceData["connectionType"] as String),
-                    modelName = deviceData["deviceName"] as String,
-                    portName = deviceData["portName"] as String,
-                    macAddress = deviceData["macAddress"] as String,
-                    usbSerialNumber = deviceData["usbSerialNumber"] as String,
+                    connectionType = connectionType,
+                    modelName = deviceData.safeGetStringOrDefault("deviceName"),
+                    portName = deviceData.safeGetStringOrDefault("portName"),
+                    macAddress = deviceData.safeGetStringOrDefault("macAddress"),
+                    usbSerialNumber = deviceData.safeGetStringOrDefault("usbSerialNumber")
                 )
 
                 coroutineScope.launch(Dispatchers.IO) {
@@ -105,8 +111,7 @@ class StarMicronicsPrintersModule : Module() {
                     "success" to false,
                     "error" to (e.localizedMessage ?: "Unknown error during printing")
                 ))
-                false
-            }.getOrNull() ?: false
+            }.getOrElse { false }
         }
     }
 } 

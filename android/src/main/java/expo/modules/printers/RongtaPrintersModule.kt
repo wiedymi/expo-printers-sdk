@@ -6,6 +6,10 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.printers.commons.PrinterConnectionType
 import expo.modules.printers.commons.PrinterDeviceData
+import expo.modules.printers.commons.safeGetIntOrDefault
+import expo.modules.printers.commons.safeGetMap
+import expo.modules.printers.commons.safeGetString
+import expo.modules.printers.commons.toPrinterConnectionType
 import expo.modules.printers.rongta.RongtaPrinter
 import expo.modules.printers.rongta.RongtaFinder
 import expo.modules.printers.rongta.RongtaPrintResult
@@ -39,12 +43,13 @@ class RongtaPrintersModule : Module() {
         }
 
         AsyncFunction("findPrinters") { connectionType: String ->
-            if (context == null) {
-                return@AsyncFunction emptyList<Map<String, Any>>()
-            }
-
             runCatching {
-                val type = PrinterConnectionType.valueOf(connectionType)
+                val type = try {
+                    connectionType.toPrinterConnectionType()
+                } catch (e: IllegalArgumentException) {
+                    Log.e(TAG, "Invalid connection type: $connectionType", e)
+                    return@AsyncFunction false
+                }
                 coroutineScope.launch(Dispatchers.IO) {
                     val printers = printerFinder?.search(type)?.map { deviceData ->
                         when (deviceData.type) {
@@ -73,8 +78,7 @@ class RongtaPrintersModule : Module() {
                 true
             }.onFailure { e ->
                 Log.e(TAG, "Failed to find printers", e)
-                false
-            }.getOrNull() ?: false
+            }.getOrElse { false }
         }
 
         AsyncFunction("printImage") { base64Image: String, deviceData: Map<String, Any> ->
@@ -83,24 +87,30 @@ class RongtaPrintersModule : Module() {
             }
 
             runCatching {
-                val connectionType = PrinterConnectionType.valueOf(deviceData["connectionType"] as String)
-                val typeData = deviceData["type"] as Map<String, Any>
+                // Safe data extraction with utility functions
+                val connectionType = deviceData.safeGetString("connectionType").toPrinterConnectionType()
+                val typeData = deviceData.safeGetMap("type", "printer type data")
+                
                 val rongtaDeviceData = when (connectionType) {
-                    PrinterConnectionType.Bluetooth -> PrinterDeviceData.Rongta(
-                        connectionType = connectionType,
-                        type = PrinterDeviceData.Rongta.Type.Bluetooth(
-                            alias = typeData["alias"] as String,
-                            name = typeData["name"] as String,
-                            address = typeData["address"] as String
+                    PrinterConnectionType.Bluetooth -> {
+                        PrinterDeviceData.Rongta(
+                            connectionType = connectionType,
+                            type = PrinterDeviceData.Rongta.Type.Bluetooth(
+                                alias = typeData.safeGetString("alias", "Bluetooth alias"),
+                                name = typeData.safeGetString("name", "Bluetooth name"),
+                                address = typeData.safeGetString("address", "Bluetooth address")
+                            )
                         )
-                    )
-                    PrinterConnectionType.Network -> PrinterDeviceData.Rongta(
-                        connectionType = connectionType,
-                        type = PrinterDeviceData.Rongta.Type.Network(
-                            ipAddress = typeData["ipAddress"] as String,
-                            port = (typeData["port"] as? Number)?.toInt() ?: 9100
+                    }
+                    PrinterConnectionType.Network -> {
+                        PrinterDeviceData.Rongta(
+                            connectionType = connectionType,
+                            type = PrinterDeviceData.Rongta.Type.Network(
+                                ipAddress = typeData.safeGetString("ipAddress", "Network IP address"),
+                                port = typeData.safeGetIntOrDefault("port", 9100)
+                            )
                         )
-                    )
+                    }
                     else -> throw IllegalArgumentException("Unsupported connection type: $connectionType")
                 }
 
@@ -126,8 +136,7 @@ class RongtaPrintersModule : Module() {
                     "success" to false,
                     "error" to (e.localizedMessage ?: "Unknown error during printing")
                 ))
-                false
-            }.getOrNull() ?: false
+            }.getOrElse { false }
         }
     }
 } 
