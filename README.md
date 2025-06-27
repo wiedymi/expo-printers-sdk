@@ -397,18 +397,5 @@ npm run android
 - ✅ **Production Ready** - Extensive testing and validation
 - ✅ **Modern Example** - Complete demo app with best practices
 
-## 📄 License
-
-MIT © [Your Organization]
-
----
-
-## 🆘 Support
-
-- 📖 **Documentation**: Check this README and example app
-- 🐛 **Issues**: [GitHub Issues](https://github.com/your-org/expo-printers-sdk/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/your-org/expo-printers-sdk/discussions)
-
----
 
 **Built with ❤️ for the React Native community**
