@@ -55,3 +55,9 @@ yarn-error.log
 
 # Expo
 .expo/*
+*.apk
+*.aab
+example/app.json
+example/eas.json
+example/android
+example/ios

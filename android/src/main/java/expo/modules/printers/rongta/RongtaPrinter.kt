@@ -3,6 +3,8 @@ package expo.modules.printers.rongta
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.Handler
+import android.os.Looper
 import android.util.Base64
 import android.util.Log
 import expo.modules.printers.commons.Printer
@@ -24,6 +26,8 @@ import com.rt.printerlibrary.setting.CommonSetting
 import com.rt.printerlibrary.utils.ConnectListener
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.ByteArrayInputStream
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 internal typealias PrinterConfigBean = Any
 
@@ -33,13 +37,15 @@ class RongtaPrinter(
 
     private val printerFactory = ThermalPrinterFactory()
     private val printer = printerFactory.create()
+    private val handler: Handler = Handler(Looper.getMainLooper())
+    private val printMutex = Mutex()
 
     override suspend fun printImage(
         base64Image: String,
         deviceData: PrinterDeviceData.Rongta
-    ): RongtaPrintResult {
+    ): RongtaPrintResult = printMutex.withLock {
         val configBean =
-            configurePrinter(deviceData) ?: return RongtaPrintResult.ErrorConnection.also {
+            configurePrinter(deviceData) ?: return@withLock RongtaPrintResult.ErrorConnection.also {
                 Log.e(TAG, "failed to configure printer - $deviceData")
             }
 
@@ -47,11 +53,11 @@ class RongtaPrinter(
             val decodedString = Base64.decode(base64Image, Base64.DEFAULT)
             val inputStream = ByteArrayInputStream(decodedString)
             BitmapFactory.decodeStream(inputStream)
-        }.getOrNull() ?: return RongtaPrintResult.ErrorInvalidImage.also {
+        }.getOrNull() ?: return@withLock RongtaPrintResult.ErrorInvalidImage.also {
             Log.e(TAG, "failed to decode image")
         }
 
-        val result = suspendCancellableCoroutine { continuation ->
+        val result = suspendCancellableCoroutine<RongtaPrintResult> { continuation ->
             printer.setConnectListener(object : ConnectListener {
                 override fun onPrinterConnected(configObj: Any?) {
                     Log.i(TAG, "printer connected - $configObj")
@@ -81,10 +87,11 @@ class RongtaPrinter(
                             Log.e(TAG, "failed to disconnect printer - $throwable")
                         }
                         .getOrNull()
-                    continuation.resumeWith(Result.success(RongtaPrintResult.Success))
+                    handler.postDelayed({
+                        continuation.resumeWith(Result.success(RongtaPrintResult.Success))
+                    }, 300)
                 }
             })
-
             runCatching {
                 Log.i(TAG, "connecting to printer - $configBean")
                 printer.connect(configBean)
@@ -105,7 +112,7 @@ class RongtaPrinter(
             }
         }
 
-        return result
+        return@withLock result
     }
 
     private fun createImagePrintCommand(image: Bitmap): ByteArray? {
