@@ -132,19 +132,9 @@ class RongtaPrinter(
         // commonSetting.pageLengthEnum = PageLengthEnum.INCH_3
         cmd.append(cmd.getCommonSettingCmd(commonSetting))
 
-        // --- NEW: ensure the bitmap is resized to a supported width (multiple of 8) ---
-        val targetWidth = calculateTargetWidth(image.width)
-        val processedBitmap = if (image.width != targetWidth) {
-            val targetHeight = (image.height * targetWidth.toFloat() / image.width).toInt()
-            Bitmap.createScaledBitmap(image, targetWidth, targetHeight, true)
-        } else {
-            image
-        }
-
-        // Recycle the original bitmap if we created a scaled copy to free memory
-        if (processedBitmap !== image && !image.isRecycled) {
-            image.recycle()
-        }
+        // For Rongta RP326 we let the printer library handle scaling. Use its ideal limit width (510px).
+        val processedBitmap = image
+        val targetWidth = 510 // empirically prints best on RP326
 
         val bitmapSettings = BitmapSetting()
         bitmapSettings.bmpPrintMode = BmpPrintMode.MODE_SINGLE_FAST
@@ -154,10 +144,6 @@ class RongtaPrinter(
             cmd.append(cmd.getBitmapCmd(bitmapSettings, processedBitmap))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to build bitmap command", e)
-            // Recycle processed bitmap on failure to avoid leaks
-            if (!processedBitmap.isRecycled) {
-                processedBitmap.recycle()
-            }
             return null
         }
 
@@ -167,14 +153,7 @@ class RongtaPrinter(
         return cmd.appendCmds
     }
 
-    // Returns a width supported by ESC/POS printers (multiple of 8 and within 384/576/832 range).
-    private fun calculateTargetWidth(originalWidth: Int): Int {
-        // Common thermal printer dot widths (2", 3", 4")
-        val supported = listOf(384, 576, 832)
-        val closest = supported.firstOrNull { it >= originalWidth } ?: supported.last()
-        // Ensure width is divisible by 8 (ESC/POS requirement)
-        return closest - (closest % 8)
-    }
+    // Removed calculateTargetWidth – not needed when letting printer handle scaling.
 
     private fun configurePrinter(
         deviceData: PrinterDeviceData.Rongta
