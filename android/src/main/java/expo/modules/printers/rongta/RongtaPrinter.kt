@@ -58,38 +58,43 @@ class RongtaPrinter(
         }
 
         val result = suspendCancellableCoroutine<RongtaPrintResult> { continuation ->
+            val isCompleted = java.util.concurrent.atomic.AtomicBoolean(false)
+
+            fun completeOnce(result: RongtaPrintResult) {
+                if (isCompleted.compareAndSet(false, true)) {
+                    continuation.resumeWith(Result.success(result))
+                }
+            }
+
             printer.setConnectListener(object : ConnectListener {
                 override fun onPrinterConnected(configObj: Any?) {
                     Log.i(TAG, "printer connected - $configObj")
                     val printingCommand = createImagePrintCommand(img)
                     if (printingCommand == null) {
                         Log.e(TAG, "failed to create printing command")
-                        continuation.resumeWith(Result.success(RongtaPrintResult.ErrorUnknown))
+                        completeOnce(RongtaPrintResult.ErrorUnknown)
                     } else {
                         Log.i(TAG, "printing receipt")
                         runCatching {
                             printer.writeMsg(printingCommand)
                         }.onFailure { throwable ->
                             Log.e(TAG, "failed to print receipt - $throwable")
-                            continuation.resumeWith(Result.success(RongtaPrintResult.ErrorUnknown))
+                            completeOnce(RongtaPrintResult.ErrorUnknown)
                         }
                     }
                 }
 
                 override fun onPrinterDisconnect(configObj: Any?) {
                     Log.i(TAG, "printer disconnected - $configObj")
+                    completeOnce(RongtaPrintResult.Success)
                 }
 
                 override fun onPrinterWritecompletion(configObj: Any?) {
                     Log.i(TAG, "printer write completion")
-                    runCatching { printer.disConnect() }
-                        .onFailure { throwable ->
-                            Log.e(TAG, "failed to disconnect printer - $throwable")
-                        }
-                        .getOrNull()
+                    // After write completion ask the library to close the connection; we'll mark success in onPrinterDisconnect
                     handler.postDelayed({
-                        continuation.resumeWith(Result.success(RongtaPrintResult.Success))
-                    }, 300)
+                        runCatching { printer.disConnect() }
+                    }, 500) // small delay to ensure internal buffer is flushed
                 }
             })
             runCatching {
@@ -97,7 +102,7 @@ class RongtaPrinter(
                 printer.connect(configBean)
             }.onFailure { throwable ->
                 Log.e(TAG, "failed to connect to printer - $throwable")
-                continuation.resumeWith(Result.success(RongtaPrintResult.ErrorUnknown))
+                completeOnce(RongtaPrintResult.ErrorUnknown)
             }
 
             continuation.invokeOnCancellation {
@@ -123,21 +128,52 @@ class RongtaPrinter(
 
         val commonSetting = CommonSetting()
         commonSetting.align = CommonEnum.ALIGN_LEFT
-        commonSetting.pageLengthEnum = PageLengthEnum.INCH_3
+        // Disable fixed page length so the printer can handle any receipt height
+        // commonSetting.pageLengthEnum = PageLengthEnum.INCH_3
         cmd.append(cmd.getCommonSettingCmd(commonSetting))
+
+        // --- NEW: ensure the bitmap is resized to a supported width (multiple of 8) ---
+        val targetWidth = calculateTargetWidth(image.width)
+        val processedBitmap = if (image.width != targetWidth) {
+            val targetHeight = (image.height * targetWidth.toFloat() / image.width).toInt()
+            Bitmap.createScaledBitmap(image, targetWidth, targetHeight, true)
+        } else {
+            image
+        }
+
+        // Recycle the original bitmap if we created a scaled copy to free memory
+        if (processedBitmap !== image && !image.isRecycled) {
+            image.recycle()
+        }
 
         val bitmapSettings = BitmapSetting()
         bitmapSettings.bmpPrintMode = BmpPrintMode.MODE_SINGLE_FAST
-        bitmapSettings.bimtapLimitWidth = 510
+        bitmapSettings.bimtapLimitWidth = targetWidth
 
-        runCatching {
-            cmd.append(cmd.getBitmapCmd(bitmapSettings, image))
+        try {
+            cmd.append(cmd.getBitmapCmd(bitmapSettings, processedBitmap))
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to build bitmap command", e)
+            // Recycle processed bitmap on failure to avoid leaks
+            if (!processedBitmap.isRecycled) {
+                processedBitmap.recycle()
+            }
+            return null
         }
 
         cmd.append(cmd.lfcrCmd)
         cmd.append(cmd.cmdCutNew)
 
         return cmd.appendCmds
+    }
+
+    // Returns a width supported by ESC/POS printers (multiple of 8 and within 384/576/832 range).
+    private fun calculateTargetWidth(originalWidth: Int): Int {
+        // Common thermal printer dot widths (2", 3", 4")
+        val supported = listOf(384, 576, 832)
+        val closest = supported.firstOrNull { it >= originalWidth } ?: supported.last()
+        // Ensure width is divisible by 8 (ESC/POS requirement)
+        return closest - (closest % 8)
     }
 
     private fun configurePrinter(
