@@ -25,16 +25,23 @@ import {
   ActivityIndicator,
   StyleSheet,
 } from "react-native";
-
-type Manufacturer = "EPSON" | "STAR" | "RONGTA";
-
-type PrinterInfo = {
-  type: Manufacturer;
-  info: EpsonPrinterInfo | RongtaPrinterInfo | StarMicronicsPrinterInfo;
-};
+import PrinterCard from "./components/printer-card";
+import ButtonRow from "./components/button-row";
+import {
+  fetchImageAsBase64,
+  deduplicatePrinters,
+  getUniquePrinterId,
+} from "./utils/printer-utils";
+import type { Manufacturer, PrinterInfo } from "./types/printer";
 
 // Test image URL - a sample receipt-like image for testing
 const TEST_IMAGE_URL = "https://placehold.co/600x400/000000/FFFFFF.png";
+
+const MONO_FONT = Platform.select({
+  ios: "Menlo",
+  android: "monospace",
+  default: "monospace",
+});
 
 export default function App() {
   const [printers, setPrinters] = useState<PrinterInfo[]>([]);
@@ -48,140 +55,66 @@ export default function App() {
     [key: string]: boolean;
   }>({});
 
-  /**
-   * Fetches an image from URL and converts it to base64 string
-   */
-  const fetchImageAsBase64 = async (imageUrl: string): Promise<string> => {
-    console.log(`Fetching image from ${imageUrl}`);
-
-    const response = await fetch(imageUrl);
-    if (!response.ok) {
-      const error = new Error(`Failed to fetch image: ${response.statusText}`);
-      console.error("Fetch error:", error);
-      throw error;
-    }
-
-    const blob = await response.blob();
-    console.log(`Successfully retrieved image blob of size ${blob.size} bytes`);
-
-    const base64String = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        // Extract the pure base64 content by removing the data URL prefix
-        const fullResult = reader.result as string;
-        const base64Data = fullResult.split(",")[1] || "";
-        resolve(base64Data);
-      };
-      reader.onerror = (error) => {
-        console.error("FileReader error:", error);
-        reject(error);
-      };
-      reader.readAsDataURL(blob);
-    });
-
-    console.log(
-      `Converted image to base64 string of length ${base64String.length}`
+  // Unified handler for onPrintersFound (no manufacturer param needed)
+  const handlePrintersFound = (data: { printers: any[] }) => {
+    setPrinters((prev) =>
+      deduplicatePrinters([
+        ...prev,
+        ...data.printers.map((printer) => ({
+          type: selectedManufacturer,
+          info: printer,
+        })),
+      ])
     );
-    return base64String;
+    setIsSearching(false);
   };
 
+  // Unified print result handler (already present)
+  const handlePrintResult = (
+    result: EpsonPrintResult | RongtaPrintResult | StarMicronicsPrintResult
+  ) => {
+    console.log("Print result:", result);
+    // Try to clear all printing states (since we use random printerId, this is a best-effort)
+    setPrintingStates((prev) => {
+      // Optionally, you could clear all, or try to match by result/printer info if available
+      const newState = { ...prev };
+      Object.keys(newState).forEach((key) => {
+        newState[key] = false;
+      });
+      return newState;
+    });
+    if (result.success) {
+      Alert.alert("Print Success", "Image printed successfully!");
+    } else {
+      Alert.alert("Print Failed", result.error || "Unknown error occurred");
+    }
+  };
+
+  // Attach only one onPrintersFound and one onPrintImage listener for the selected manufacturer
   useEffect(() => {
-    // Set up event listeners for printer discovery
-    const epsonListener = EpsonPrinters.addListener(
-      "onPrintersFound",
-      (data: { printers: EpsonPrinterInfo[] }) => {
-        console.log("Epson printers found:", data.printers.length);
-        setPrinters((prev) => [
-          ...prev,
-          ...data.printers.map((printer) => ({
-            type: "EPSON" as Manufacturer,
-            info: printer,
-          })),
-        ]);
-        setIsSearching(false);
-      }
-    );
-
-    const rongtaListener = RongtaPrinters.addListener(
-      "onPrintersFound",
-      (data: { printers: RongtaPrinterInfo[] }) => {
-        console.log("Rongta printers found:", data.printers.length);
-        setPrinters((prev) => [
-          ...prev,
-          ...data.printers.map((printer) => ({
-            type: "RONGTA" as Manufacturer,
-            info: printer,
-          })),
-        ]);
-        setIsSearching(false);
-      }
-    );
-
-    const starListener = StarMicronicsPrinters.addListener(
-      "onPrintersFound",
-      (data: { printers: StarMicronicsPrinterInfo[] }) => {
-        console.log("Star Micronics printers found:", data.printers.length);
-        setPrinters((prev) => [
-          ...prev,
-          ...data.printers.map((printer) => ({
-            type: "STAR" as Manufacturer,
-            info: printer,
-          })),
-        ]);
-        setIsSearching(false);
-      }
-    );
-
-    // Set up event listeners for print results
-    const epsonPrintListener = EpsonPrinters.addListener(
-      "onPrintImage",
-      (result: EpsonPrintResult) => {
-        console.log("Epson print result:", result);
-        setPrintingStates((prev) => ({ ...prev, epson: false }));
-        if (result.success) {
-          Alert.alert("Print Success", "Image printed successfully!");
-        } else {
-          Alert.alert("Print Failed", result.error || "Unknown error occurred");
-        }
-      }
-    );
-
-    const rongtaPrintListener = RongtaPrinters.addListener(
-      "onPrintImage",
-      (result: RongtaPrintResult) => {
-        console.log("Rongta print result:", result);
-        setPrintingStates((prev) => ({ ...prev, rongta: false }));
-        if (result.success) {
-          Alert.alert("Print Success", "Image printed successfully!");
-        } else {
-          Alert.alert("Print Failed", result.error || "Unknown error occurred");
-        }
-      }
-    );
-
-    const starPrintListener = StarMicronicsPrinters.addListener(
-      "onPrintImage",
-      (result: StarMicronicsPrintResult) => {
-        console.log("Star print result:", result);
-        setPrintingStates((prev) => ({ ...prev, star: false }));
-        if (result.success) {
-          Alert.alert("Print Success", "Image printed successfully!");
-        } else {
-          Alert.alert("Print Failed", result.error || "Unknown error occurred");
-        }
-      }
-    );
-
+    let foundListener: { remove: () => void } | null = null;
+    let printListener: { remove: () => void } | null = null;
+    let mod: any;
+    switch (selectedManufacturer) {
+      case "EPSON":
+        mod = EpsonPrinters;
+        break;
+      case "RONGTA":
+        mod = RongtaPrinters;
+        break;
+      case "STAR":
+        mod = StarMicronicsPrinters;
+        break;
+    }
+    if (mod) {
+      foundListener = mod.addListener("onPrintersFound", handlePrintersFound);
+      printListener = mod.addListener("onPrintImage", handlePrintResult);
+    }
     return () => {
-      console.log("Cleaning up listeners");
-      epsonListener.remove();
-      rongtaListener.remove();
-      starListener.remove();
-      epsonPrintListener.remove();
-      rongtaPrintListener.remove();
-      starPrintListener.remove();
+      foundListener?.remove();
+      printListener?.remove();
     };
-  }, []);
+  }, [selectedManufacturer]);
 
   const requestPermissions = async () => {
     console.log("Requesting permissions");
@@ -245,26 +178,24 @@ export default function App() {
 
       console.log("Searching for printers...");
       let searchPromise: Promise<boolean>;
-
-      if (selectedManufacturer === "EPSON") {
-        searchPromise = EpsonPrinters.findPrinters(selectedConnectionType);
-      } else if (selectedManufacturer === "RONGTA") {
-        searchPromise = RongtaPrinters.findPrinters(selectedConnectionType);
-      } else if (selectedManufacturer === "STAR") {
-        searchPromise = StarMicronicsPrinters.findPrinters(
-          selectedConnectionType
-        );
-      } else {
-        throw new Error("Unknown manufacturer");
+      switch (selectedManufacturer) {
+        case "EPSON":
+          searchPromise = EpsonPrinters.findPrinters(selectedConnectionType);
+          break;
+        case "RONGTA":
+          searchPromise = RongtaPrinters.findPrinters(selectedConnectionType);
+          break;
+        case "STAR":
+          searchPromise = StarMicronicsPrinters.findPrinters(
+            selectedConnectionType
+          );
+          break;
+        default:
+          throw new Error("Unknown manufacturer");
       }
-
       const result = await searchPromise;
       console.log("Search completed with result:", result);
-
-      // Set a timeout to stop searching if no results come back
-      setTimeout(() => {
-        setIsSearching(false);
-      }, 10000); // 10 second timeout
+      // No timeout here; isSearching will be set to false in the listener
     } catch (error) {
       console.error("Failed to find printers:", error);
       Alert.alert("Error", "Failed to find printers. Please try again.");
@@ -273,7 +204,7 @@ export default function App() {
   };
 
   const handlePrint = async (printer: PrinterInfo) => {
-    const printerId = `${printer.type}-${Math.random()}`;
+    const printerId = getUniquePrinterId(printer);
     setPrintingStates((prev) => ({ ...prev, [printerId]: true }));
 
     try {
@@ -285,29 +216,31 @@ export default function App() {
 
       // Fetch the image and convert to base64
       const base64Image = await fetchImageAsBase64(TEST_IMAGE_URL);
+      let result: boolean;
 
-      let printPromise: Promise<boolean>;
-
-      if (printer.type === "EPSON") {
-        printPromise = EpsonPrinters.printImage(
-          base64Image,
-          printer.info as EpsonPrinterInfo
-        );
-      } else if (printer.type === "RONGTA") {
-        printPromise = RongtaPrinters.printImage(
-          base64Image,
-          printer.info as RongtaPrinterInfo
-        );
-      } else if (printer.type === "STAR") {
-        printPromise = StarMicronicsPrinters.printImage(
-          base64Image,
-          printer.info as StarMicronicsPrinterInfo
-        );
-      } else {
-        throw new Error("Unknown printer type");
+      switch (printer.type) {
+        case "EPSON":
+          result = await EpsonPrinters.printImage(
+            base64Image,
+            printer.info as EpsonPrinterInfo
+          );
+          break;
+        case "RONGTA":
+          result = await RongtaPrinters.printImage(
+            base64Image,
+            printer.info as RongtaPrinterInfo
+          );
+          break;
+        case "STAR":
+          result = await StarMicronicsPrinters.printImage(
+            base64Image,
+            printer.info as StarMicronicsPrinterInfo
+          );
+          break;
+        default:
+          throw new Error("Unknown printer type");
       }
 
-      const result = await printPromise;
       console.log("Print initiated with result:", result);
 
       if (!result) {
@@ -334,89 +267,6 @@ export default function App() {
     }
   };
 
-  const renderPrinterInfo = (printer: PrinterInfo) => {
-    switch (printer.type) {
-      case "EPSON":
-        const epsonInfo = printer.info as EpsonPrinterInfo;
-        return (
-          <View style={styles.printerDetails}>
-            <Text style={styles.detailText}>
-              Device: {epsonInfo.deviceName}
-            </Text>
-            <Text style={styles.detailText}>Target: {epsonInfo.target}</Text>
-            <Text style={styles.detailText}>
-              IP Address: {epsonInfo.ipAddress}
-            </Text>
-            <Text style={styles.detailText}>
-              MAC Address: {epsonInfo.macAddress}
-            </Text>
-            <Text style={styles.detailText}>
-              BD Address: {epsonInfo.bdAddress}
-            </Text>
-            <Text style={styles.detailText}>
-              Connection: {epsonInfo.connectionType}
-            </Text>
-            <Text style={styles.detailText}>
-              Device Type: {epsonInfo.deviceType}
-            </Text>
-          </View>
-        );
-      case "RONGTA":
-        const rongtaInfo = printer.info as RongtaPrinterInfo;
-        return (
-          <View style={styles.printerDetails}>
-            <Text style={styles.detailText}>
-              Connection: {rongtaInfo.connectionType}
-            </Text>
-            <Text style={styles.detailText}>Type: {rongtaInfo.type.type}</Text>
-            {rongtaInfo.type.type === "BLUETOOTH" ? (
-              <>
-                <Text style={styles.detailText}>
-                  Alias: {rongtaInfo.type.alias}
-                </Text>
-                <Text style={styles.detailText}>
-                  Name: {rongtaInfo.type.name}
-                </Text>
-                <Text style={styles.detailText}>
-                  Address: {rongtaInfo.type.address}
-                </Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.detailText}>
-                  IP Address: {rongtaInfo.type.ipAddress}
-                </Text>
-                <Text style={styles.detailText}>
-                  Port: {rongtaInfo.type.port}
-                </Text>
-              </>
-            )}
-          </View>
-        );
-      case "STAR":
-        const starInfo = printer.info as StarMicronicsPrinterInfo;
-        return (
-          <View style={styles.printerDetails}>
-            <Text style={styles.detailText}>Device: {starInfo.deviceName}</Text>
-            <Text style={styles.detailText}>Port: {starInfo.portName}</Text>
-            <Text style={styles.detailText}>
-              MAC Address: {starInfo.macAddress}
-            </Text>
-            <Text style={styles.detailText}>
-              USB Serial: {starInfo.usbSerialNumber}
-            </Text>
-            <Text style={styles.detailText}>
-              Connection: {starInfo.connectionType}
-            </Text>
-          </View>
-        );
-    }
-  };
-
-  const getPrinterId = (printer: PrinterInfo, index: number) => {
-    return `${printer.type}-${index}`;
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
@@ -424,58 +274,28 @@ export default function App() {
 
         {/* Connection Type Selection */}
         <Text style={styles.sectionTitle}>Connection Type</Text>
-        <View style={styles.buttonRow}>
-          {(["Network", "Bluetooth", "USB"] as PrinterConnectionType[]).map(
-            (type) => (
-              <TouchableOpacity
-                key={type}
-                style={[
-                  styles.connectionButton,
-                  selectedConnectionType === type && styles.selectedButton,
-                ]}
-                onPress={() => setSelectedConnectionType(type)}
-              >
-                <Text
-                  style={[
-                    styles.buttonText,
-                    selectedConnectionType === type &&
-                      styles.selectedButtonText,
-                  ]}
-                >
-                  {type}
-                </Text>
-              </TouchableOpacity>
-            )
-          )}
-        </View>
+        <ButtonRow
+          options={["Network", "Bluetooth", "USB"]}
+          selected={selectedConnectionType}
+          onSelect={setSelectedConnectionType}
+          buttonStyle={styles.connectionButton}
+          selectedButtonStyle={styles.selectedButton}
+          buttonTextStyle={styles.buttonText}
+          selectedButtonTextStyle={styles.selectedButtonText}
+        />
 
         {/* Manufacturer Selection */}
         <Text style={styles.sectionTitle}>Manufacturer</Text>
-        <View style={styles.buttonRow}>
-          {(["EPSON", "RONGTA", "STAR"] as Manufacturer[]).map(
-            (manufacturer) => (
-              <TouchableOpacity
-                key={manufacturer}
-                style={[
-                  styles.manufacturerButton,
-                  selectedManufacturer === manufacturer &&
-                    styles.selectedButton,
-                ]}
-                onPress={() => setSelectedManufacturer(manufacturer)}
-              >
-                <Text
-                  style={[
-                    styles.buttonText,
-                    selectedManufacturer === manufacturer &&
-                      styles.selectedButtonText,
-                  ]}
-                >
-                  {manufacturer === "STAR" ? "Star" : manufacturer}
-                </Text>
-              </TouchableOpacity>
-            )
-          )}
-        </View>
+        <ButtonRow
+          options={["EPSON", "RONGTA", "STAR"]}
+          selected={selectedManufacturer}
+          onSelect={setSelectedManufacturer}
+          buttonStyle={styles.manufacturerButton}
+          selectedButtonStyle={styles.selectedButton}
+          buttonTextStyle={styles.buttonText}
+          selectedButtonTextStyle={styles.selectedButtonText}
+          labelMap={{ STAR: "Star", EPSON: "EPSON", RONGTA: "RONGTA" }}
+        />
 
         {/* Search Button */}
         <TouchableOpacity
@@ -485,6 +305,8 @@ export default function App() {
           ]}
           onPress={handleSearch}
           disabled={isSearching || isRequestingPermissions}
+          accessibilityLabel="Search for printers"
+          accessible={true}
         >
           {isSearching ? (
             <View style={styles.loadingContainer}>
@@ -512,29 +334,18 @@ export default function App() {
               </Text>
             </View>
           ) : (
-            printers.map((printer, index) => (
-              <View key={index} style={styles.printerCard}>
-                <View style={styles.printerHeader}>
-                  <Text style={styles.printerType}>{printer.type}</Text>
-                  <TouchableOpacity
-                    style={[
-                      styles.printButton,
-                      printingStates[getPrinterId(printer, index)] &&
-                        styles.disabledButton,
-                    ]}
-                    onPress={() => handlePrint(printer)}
-                    disabled={printingStates[getPrinterId(printer, index)]}
-                  >
-                    {printingStates[getPrinterId(printer, index)] ? (
-                      <ActivityIndicator color="#fff" size="small" />
-                    ) : (
-                      <Text style={styles.printButtonText}>Print Test</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-                {renderPrinterInfo(printer)}
-              </View>
-            ))
+            printers.map((printer, index) => {
+              const printerId = getUniquePrinterId(printer);
+              return (
+                <PrinterCard
+                  key={printerId}
+                  printer={printer}
+                  onPrint={handlePrint}
+                  isPrinting={!!printingStates[printerId]}
+                  printerId={printerId}
+                />
+              );
+            })
           )}
         </ScrollView>
       </View>
@@ -556,14 +367,16 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginBottom: 24,
     textAlign: "center",
-    color: "#333",
+    color: "#111",
+    fontFamily: MONO_FONT,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: "600",
     marginBottom: 8,
     marginTop: 16,
-    color: "#555",
+    color: "#222",
+    fontFamily: MONO_FONT,
   },
   buttonRow: {
     flexDirection: "row",
@@ -572,48 +385,52 @@ const styles = StyleSheet.create({
   connectionButton: {
     flex: 1,
     padding: 10,
-    backgroundColor: "#f0f0f0",
+    backgroundColor: "#f5f5f5",
     marginHorizontal: 4,
-    borderRadius: 8,
+    borderRadius: 0,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#e0e0e0",
+    borderColor: "#d1d1d1",
   },
   manufacturerButton: {
     flex: 1,
     padding: 10,
-    backgroundColor: "#f0f0f0",
+    backgroundColor: "#f5f5f5",
     marginHorizontal: 4,
-    borderRadius: 8,
+    borderRadius: 0,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#e0e0e0",
+    borderColor: "#d1d1d1",
   },
   selectedButton: {
-    backgroundColor: "#007AFF",
-    borderColor: "#0056CC",
+    backgroundColor: "#222",
+    borderColor: "#111",
+    borderRadius: 0,
   },
   buttonText: {
-    color: "#333",
+    color: "#222",
     fontWeight: "500",
+    fontFamily: MONO_FONT,
   },
   selectedButtonText: {
     color: "#fff",
+    fontFamily: MONO_FONT,
   },
   searchButton: {
-    backgroundColor: "#007AFF",
+    backgroundColor: "#222",
     padding: 16,
-    borderRadius: 8,
+    borderRadius: 0,
     alignItems: "center",
     marginTop: 16,
   },
   disabledButton: {
-    backgroundColor: "#ccc",
+    backgroundColor: "#bbb",
   },
   searchButtonText: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
+    fontFamily: MONO_FONT,
   },
   loadingContainer: {
     flexDirection: "row",
@@ -624,6 +441,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 16,
     fontWeight: "600",
+    fontFamily: MONO_FONT,
   },
   resultsContainer: {
     flex: 1,
@@ -635,22 +453,24 @@ const styles = StyleSheet.create({
   },
   emptyStateText: {
     fontSize: 16,
-    color: "#666",
+    color: "#444",
     textAlign: "center",
+    fontFamily: MONO_FONT,
   },
   emptyStateSubtext: {
     fontSize: 14,
-    color: "#999",
+    color: "#888",
     textAlign: "center",
     marginTop: 8,
+    fontFamily: MONO_FONT,
   },
   printerCard: {
-    backgroundColor: "#f8f8f8",
+    backgroundColor: "#f5f5f5",
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 0,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#e0e0e0",
+    borderColor: "#d1d1d1",
   },
   printerHeader: {
     flexDirection: "row",
@@ -661,24 +481,27 @@ const styles = StyleSheet.create({
   printerType: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#333",
+    color: "#111",
+    fontFamily: MONO_FONT,
   },
   printButton: {
-    backgroundColor: "#34C759",
+    backgroundColor: "#444",
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 6,
+    borderRadius: 0,
   },
   printButtonText: {
     color: "#fff",
     fontWeight: "600",
+    fontFamily: MONO_FONT,
   },
   printerDetails: {
     gap: 4,
   },
   detailText: {
     fontSize: 14,
-    color: "#666",
+    color: "#333",
     lineHeight: 20,
+    fontFamily: MONO_FONT,
   },
 });
