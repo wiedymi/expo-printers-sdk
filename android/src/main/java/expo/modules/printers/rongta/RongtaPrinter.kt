@@ -44,8 +44,17 @@ class RongtaPrinter(
         base64Image: String,
         deviceData: PrinterDeviceData.Rongta
     ): RongtaPrintResult = printMutex.withLock {
+
+        return@withLock sendPrintJob(base64Image, deviceData)
+    }
+
+    private suspend fun sendPrintJob(
+        base64Image: String,
+        deviceData: PrinterDeviceData.Rongta
+    ): RongtaPrintResult {
+
         val configBean =
-            configurePrinter(deviceData) ?: return@withLock RongtaPrintResult.ErrorConnection.also {
+            configurePrinter(deviceData) ?: return RongtaPrintResult.ErrorConnection.also {
                 Log.e(TAG, "failed to configure printer - $deviceData")
             }
 
@@ -53,7 +62,7 @@ class RongtaPrinter(
             val decodedString = Base64.decode(base64Image, Base64.DEFAULT)
             val inputStream = ByteArrayInputStream(decodedString)
             BitmapFactory.decodeStream(inputStream)
-        }.getOrNull() ?: return@withLock RongtaPrintResult.ErrorInvalidImage.also {
+        }.getOrNull() ?: return RongtaPrintResult.ErrorInvalidImage.also {
             Log.e(TAG, "failed to decode image")
         }
 
@@ -79,7 +88,7 @@ class RongtaPrinter(
                             printer.writeMsg(printingCommand)
                         }.onFailure { throwable ->
                             Log.e(TAG, "failed to print receipt - $throwable")
-                            completeOnce(RongtaPrintResult.ErrorUnknown)
+                            completeOnce(RongtaPrintResult.ErrorConnection)
                         }
                     }
                 }
@@ -102,7 +111,7 @@ class RongtaPrinter(
                 printer.connect(configBean)
             }.onFailure { throwable ->
                 Log.e(TAG, "failed to connect to printer - $throwable")
-                completeOnce(RongtaPrintResult.ErrorUnknown)
+                completeOnce(RongtaPrintResult.ErrorConnection)
             }
 
             continuation.invokeOnCancellation {
@@ -117,31 +126,31 @@ class RongtaPrinter(
             }
         }
 
-        return@withLock result
+        return result
     }
 
     private fun createImagePrintCommand(image: Bitmap): ByteArray? {
         val cmdFactory = EscFactory()
         val cmd = cmdFactory.create()
-        cmd.chartsetName = "UTF-8"
+
+        cmd.append(byteArrayOf(0x1B, 0x40)) // reset printer
         cmd.append(cmd.headerCmd)
 
-        val commonSetting = CommonSetting()
-        commonSetting.align = CommonEnum.ALIGN_LEFT
-        // Disable fixed page length so the printer can handle any receipt height
-        // commonSetting.pageLengthEnum = PageLengthEnum.INCH_3
+        val commonSetting = CommonSetting().apply {
+            align = CommonEnum.ALIGN_LEFT
+        }
         cmd.append(cmd.getCommonSettingCmd(commonSetting))
 
-        // For Rongta RP326 we let the printer library handle scaling. Use its ideal limit width (510px).
-        val processedBitmap = image
-        val targetWidth = 510 // empirically prints best on RP326
 
-        val bitmapSettings = BitmapSetting()
-        bitmapSettings.bmpPrintMode = BmpPrintMode.MODE_SINGLE_FAST
-        bitmapSettings.bimtapLimitWidth = targetWidth
+        val targetWidth = 510 
+
+        val bitmapSettings = BitmapSetting().apply {
+            bmpPrintMode = BmpPrintMode.MODE_DITHER_DOUBLE_DENSITY // Buffer-friendly
+            bitmapLimitWidth = targetWidth
+        }
 
         try {
-            cmd.append(cmd.getBitmapCmd(bitmapSettings, processedBitmap))
+            cmd.append(cmd.getBitmapCmd(bitmapSettings, image))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to build bitmap command", e)
             return null
