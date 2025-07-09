@@ -8,7 +8,6 @@ import android.os.Looper
 import android.util.Base64
 import android.util.Log
 import expo.modules.printers.commons.Printer
-import expo.modules.printers.commons.PrinterConnectionType
 import expo.modules.printers.commons.PrinterDeviceData
 import expo.modules.printers.rongta.bluetooth.getBluetoothAdapter
 import com.rt.printerlibrary.bean.BluetoothEdrConfigBean
@@ -17,7 +16,6 @@ import com.rt.printerlibrary.cmd.EscFactory
 import com.rt.printerlibrary.enumerate.BmpPrintMode
 import com.rt.printerlibrary.enumerate.CommonEnum
 import com.rt.printerlibrary.enumerate.ConnectStateEnum
-import com.rt.printerlibrary.enumerate.PageLengthEnum
 import com.rt.printerlibrary.factory.connect.BluetoothFactory
 import com.rt.printerlibrary.factory.connect.WiFiFactory
 import com.rt.printerlibrary.factory.printer.ThermalPrinterFactory
@@ -145,8 +143,8 @@ class RongtaPrinter(
         val targetWidth = 510 
 
         val bitmapSettings = BitmapSetting().apply {
-            bmpPrintMode = BmpPrintMode.MODE_DITHER_DOUBLE_DENSITY // Buffer-friendly
-            bitmapLimitWidth = targetWidth
+            bmpPrintMode = BmpPrintMode.MODE_SINGLE_COLOR // Buffer-friendly
+            bimtapLimitWidth = targetWidth
         }
 
         try {
@@ -161,8 +159,6 @@ class RongtaPrinter(
 
         return cmd.appendCmds
     }
-
-    // Removed calculateTargetWidth – not needed when letting printer handle scaling.
 
     private fun configurePrinter(
         deviceData: PrinterDeviceData.Rongta

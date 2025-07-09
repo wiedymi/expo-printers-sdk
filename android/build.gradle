@@ -1,7 +1,7 @@
 apply plugin: 'com.android.library'
 
 group = 'expo.modules.printers'
-version = '0.1.0'
+version = '0.8.0'
 
 def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
 apply from: expoModulesCorePlugin
@@ -35,7 +35,7 @@ android {
   namespace "expo.modules.printers"
   defaultConfig {
     versionCode 1
-    versionName "0.1.0"
+    versionName "0.8.0"
   }
   lintOptions {
     abortOnError false
@@ -50,7 +50,7 @@ android {
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation files('libs/ePOS2.jar')
-    implementation files('libs/rongta_printer_library.jar')
+    implementation files('libs/rongta_library.jar')
 
     implementation 'com.starmicronics:stario:2.10.1'
     implementation 'com.starmicronics:starioextension:1.15.1'
