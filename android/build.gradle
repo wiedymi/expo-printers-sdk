@@ -47,6 +47,8 @@ android {
   }
 }
 
+
+
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation files('libs/ePOS2.jar')

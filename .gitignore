@@ -61,3 +61,5 @@ example/app.json
 example/eas.json
 example/android
 example/ios
+
+/docs

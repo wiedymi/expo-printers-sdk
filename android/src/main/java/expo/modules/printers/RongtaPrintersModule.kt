@@ -70,6 +70,15 @@ class RongtaPrintersModule : Module() {
                                     "port" to deviceData.type.port
                                 )
                             )
+                            is PrinterDeviceData.Rongta.Type.Usb -> mapOf(
+                                "connectionType" to deviceData.connectionType.name,
+                                "type" to mapOf(
+                                    "type" to "USB",
+                                    "name" to deviceData.type.name,
+                                    "vendorId" to deviceData.type.vendorId,
+                                    "productId" to deviceData.type.productId
+                                )
+                            )
                         }
                     } ?: emptyList()
 
@@ -123,6 +132,7 @@ class RongtaPrintersModule : Module() {
                         "error" to when (result) {
                             RongtaPrintResult.ErrorInvalidImage -> "Invalid image data"
                             RongtaPrintResult.ErrorConnection -> "Failed to connect to printer"
+                            RongtaPrintResult.ErrorPermission -> "No permission to access printer"
                             RongtaPrintResult.ErrorUnknown -> "Unknown error occurred"
                             RongtaPrintResult.Success -> null
                             null -> "Printer not initialized"

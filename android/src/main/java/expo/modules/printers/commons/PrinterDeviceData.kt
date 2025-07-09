@@ -38,6 +38,12 @@ sealed class PrinterDeviceData {
                 val ipAddress: String,
                 val port: Int,
             ) : Type()
+
+            data class Usb(
+                val name: String,
+                val vendorId: Int,
+                val productId: Int,
+            ) : Type()
         }
     }
 }
