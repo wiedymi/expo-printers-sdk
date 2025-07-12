@@ -16,6 +16,12 @@ export type RongtaPrinterType =
       type: "NETWORK";
       ipAddress: string;
       port: number;
+    }
+  | {
+      type: "USB";
+      name: string;
+      vendorId: number;
+      productId: number;
     };
 
 export type RongtaPrintResult = {
