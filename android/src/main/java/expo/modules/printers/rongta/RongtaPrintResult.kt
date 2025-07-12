@@ -6,4 +6,5 @@ enum class RongtaPrintResult {
     ErrorPermission,
     ErrorUnknown,
     ErrorInvalidImage,
+    ErrorPrint,
 }

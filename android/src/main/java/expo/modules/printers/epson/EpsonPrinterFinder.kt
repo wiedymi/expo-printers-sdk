@@ -67,9 +67,7 @@ class EpsonPrinterFinder(
         return FilterOption()
             .apply {
                 portType = discoveryPortType
-                // Docs: Hybrid model printers can be detected as deviceType of Discovery.TYPE_PRINTER and Discovery.TYPE_HYBRID_PRINTER.
-                deviceType = Discovery.TYPE_PRINTER
-                epsonFilter = Discovery.FILTER_NAME
+                deviceType = Discovery.TYPE_ALL
                 usbDeviceName = Discovery.TRUE
             }
     }

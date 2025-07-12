@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Rongta -->
+    <usb-device vendor-id="12625" /> 
+    <usb-device vendor-id="4070" /> 
+    <!-- Epson -->
+    <usb-device vendor-id="1208" />
+    <!-- Star Micronics -->
+    <usb-device vendor-id="1305" />
+</resources> 

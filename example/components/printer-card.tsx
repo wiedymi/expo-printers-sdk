@@ -68,13 +68,25 @@ const PrinterCard: React.FC<PrinterCardProps> = ({
                   Address: {rongtaInfo.type.address}
                 </Text>
               </>
-            ) : (
+            ) : rongtaInfo.type.type === "NETWORK" ? (
               <>
                 <Text style={styles.detailText}>
                   IP Address: {rongtaInfo.type.ipAddress}
                 </Text>
                 <Text style={styles.detailText}>
                   Port: {rongtaInfo.type.port}
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.detailText}>
+                  Name: {rongtaInfo.type.name}
+                </Text>
+                <Text style={styles.detailText}>
+                  Vendor ID: {rongtaInfo.type.vendorId}
+                </Text>
+                <Text style={styles.detailText}>
+                  Product ID: {rongtaInfo.type.productId}
                 </Text>
               </>
             )}

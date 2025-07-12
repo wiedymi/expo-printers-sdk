@@ -245,7 +245,12 @@ export default function App() {
 
       if (!result) {
         setPrintingStates((prev) => ({ ...prev, [printerId]: false }));
-        Alert.alert("Print Failed", "Failed to initiate print job");
+        let errorMsg = "Failed to initiate print job";
+        if (printer.type === "RONGTA" && selectedConnectionType === "USB") {
+          errorMsg =
+            "Failed to initiate USB print job. Please ensure the printer is connected and permission is granted.";
+        }
+        Alert.alert("Print Failed", errorMsg);
       }
       // Note: actual result will come via event listener
     } catch (error) {
@@ -262,7 +267,10 @@ export default function App() {
           errorMessage = error.message;
         }
       }
-
+      if (printer.type === "RONGTA" && selectedConnectionType === "USB") {
+        errorMessage =
+          "USB print failed. Please check USB connection and permissions.";
+      }
       Alert.alert("Print Failed", errorMessage);
     }
   };

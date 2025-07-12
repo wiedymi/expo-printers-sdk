@@ -120,7 +120,16 @@ class RongtaPrintersModule : Module() {
                             )
                         )
                     }
-                    else -> throw IllegalArgumentException("Unsupported connection type: $connectionType")
+                    PrinterConnectionType.USB -> {
+                        PrinterDeviceData.Rongta(
+                            connectionType = connectionType,
+                            type = PrinterDeviceData.Rongta.Type.Usb(
+                                name = typeData.safeGetString("name", "USB name"),
+                                vendorId = typeData.safeGetIntOrDefault("vendorId", 0),
+                                productId = typeData.safeGetIntOrDefault("productId", 0)
+                            )
+                        )
+                    }
                 }
 
                 coroutineScope.launch(Dispatchers.IO) {
@@ -133,6 +142,7 @@ class RongtaPrintersModule : Module() {
                             RongtaPrintResult.ErrorInvalidImage -> "Invalid image data"
                             RongtaPrintResult.ErrorConnection -> "Failed to connect to printer"
                             RongtaPrintResult.ErrorPermission -> "No permission to access printer"
+                            RongtaPrintResult.ErrorPrint -> "Failed to print receipt"
                             RongtaPrintResult.ErrorUnknown -> "Unknown error occurred"
                             RongtaPrintResult.Success -> null
                             null -> "Printer not initialized"
