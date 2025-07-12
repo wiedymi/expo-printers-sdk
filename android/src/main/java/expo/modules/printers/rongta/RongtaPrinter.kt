@@ -117,10 +117,10 @@ class RongtaPrinter(
                                     Log.i(TAG, "Polling detected print job is finished.")
                                     completeOnce(RongtaPrintResult.Success)
                                 } else {
-                                    handler.postDelayed({ pollPrintCompletion() }, 200)
+                                    handler.postDelayed({ pollPrintCompletion() }, 500)
                                 }
                             }
-                            handler.postDelayed({ pollPrintCompletion() }, 200)
+                            handler.postDelayed({ pollPrintCompletion() }, 2000)
                             Log.i(TAG, "pollPrintCompletion called")
                         }.onFailure { throwable ->
                             Log.e(TAG, "failed to print receipt - $throwable")
@@ -142,7 +142,7 @@ class RongtaPrinter(
                 printer.connect(configBean)
                 Log.i(TAG, "printer.connect(configBean) called successfully")
             }.onFailure { throwable ->
-                Log.e(TAG, "Exception during printer.connect: ${throwable.message}", throwable)
+                Log.e(TAG, "Exception during printer.connect:  ${throwable.message}", throwable)
                 completeOnce(RongtaPrintResult.ErrorConnection)
             }
             continuation.invokeOnCancellation {
@@ -247,6 +247,7 @@ class RongtaPrinter(
         val printerInterface = usbFactory.create()
         printerInterface.configObject = configBean
         printer.setPrinterInterface(printerInterface)
+        // (No disconnect logic for USB, as connectState is not safe to access)
         Log.i(TAG, "USB printer configured: $usbDevice, configBean: $configBean, printerInterface: $printerInterface")
         return ConfigurationResult.Success(configBean)
     }
@@ -339,6 +340,14 @@ class RongtaPrinter(
         val printerInterface = btFactory.create()
         printerInterface.configObject = configBean
         printer.setPrinterInterface(printerInterface)
+        // Disconnect if already connected (after interface is set)
+        if (printer.connectState == ConnectStateEnum.Connected) {
+            Log.i(TAG, "Printer already connected (Bluetooth). Disconnecting before reconnecting.")
+            runCatching { printer.disConnect() }
+                .onFailure { throwable ->
+                    Log.e(TAG, "Failed to disconnect printer before reconnecting (Bluetooth): $throwable")
+                }
+        }
         return ConfigurationResult.Success(configBean)
     }
 
@@ -351,6 +360,14 @@ class RongtaPrinter(
         val printerInterface = wiFiFactory.create()
         printerInterface.configObject = configBean
         printer.setPrinterInterface(printerInterface)
+        // Disconnect if already connected (after interface is set)
+        if (printer.connectState == ConnectStateEnum.Connected) {
+            Log.i(TAG, "Printer already connected (Network). Disconnecting before reconnecting.")
+            runCatching { printer.disConnect() }
+                .onFailure { throwable ->
+                    Log.e(TAG, "Failed to disconnect printer before reconnecting (Network): $throwable")
+                }
+        }
         return ConfigurationResult.Success(configBean)
     }
 
