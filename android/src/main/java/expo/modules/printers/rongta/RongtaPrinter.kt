@@ -89,6 +89,12 @@ class RongtaPrinter(
                 if (isCompleted.compareAndSet(false, true)) {
                     printer.setPrintListener(null)
                     printer.setConnectListener(null)
+                    if (printer.connectState == ConnectStateEnum.Connected) {
+                        runCatching { printer.disConnect() }
+                            .onFailure { throwable ->
+                                Log.e(TAG, "failed to disconnect printer - $throwable")
+                            }
+                    }
                     Log.i(TAG, "sendPrintJob: Completing print job with result: $result")
                     continuation.resumeWith(Result.success(result))
                 }
@@ -105,6 +111,17 @@ class RongtaPrinter(
                         runCatching {
                             printer.writeMsg(printingCommand)
                             Log.i(TAG, "printer.writeMsg called successfully")
+
+                            fun pollPrintCompletion() {
+                                if (!printer.isPrinting) {
+                                    Log.i(TAG, "Polling detected print job is finished.")
+                                    completeOnce(RongtaPrintResult.Success)
+                                } else {
+                                    handler.postDelayed({ pollPrintCompletion() }, 200)
+                                }
+                            }
+                            handler.postDelayed({ pollPrintCompletion() }, 200)
+                            Log.i(TAG, "pollPrintCompletion called")
                         }.onFailure { throwable ->
                             Log.e(TAG, "failed to print receipt - $throwable")
                             completeOnce(RongtaPrintResult.ErrorPrint)
@@ -114,17 +131,10 @@ class RongtaPrinter(
                 override fun onPrinterDisconnect(configObj: Any?) {
                     Log.i(TAG, "onPrinterDisconnect: $configObj, connectState: ${printer.connectState}, thread: ${printer.connectState}")
                 }
+                
                 override fun onPrinterWritecompletion(configObj: Any?) {
                     Log.i(TAG, "onPrinterWritecompletion: $configObj, connectState: ${printer.connectState}, thread: ${Thread.currentThread().name}")
-                    fun pollPrintCompletion() {
-                        if (!printer.isPrinting) {
-                            Log.i(TAG, "Polling detected print job is finished.")
-                            completeOnce(RongtaPrintResult.Success)
-                        } else {
-                            handler.postDelayed({ pollPrintCompletion() }, 200)
-                        }
-                    }
-                    handler.postDelayed({ pollPrintCompletion() }, 200)
+                
                 }
             })
             Log.i(TAG, "About to call printer.connect(configBean) on thread: ${Thread.currentThread().name}")
