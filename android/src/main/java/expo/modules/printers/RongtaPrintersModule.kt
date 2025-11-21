@@ -13,7 +13,6 @@ import expo.modules.printers.commons.toPrinterConnectionType
 import expo.modules.printers.rongta.RongtaPrinter
 import expo.modules.printers.rongta.RongtaFinder
 import expo.modules.printers.rongta.RongtaPrintResult
-import expo.modules.printers.rongta.network.RongtaNetworkDebugScanner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -57,15 +56,6 @@ class RongtaPrintersModule : Module() {
             }.onFailure { e ->
                 Log.e(TAG, "Failed to create manual connection", e)
             }.getOrNull()
-        }
-
-        AsyncFunction("debugNetwork") {
-            runCatching {
-                coroutineScope.launch(Dispatchers.IO) {
-                    RongtaNetworkDebugScanner.debugNetworkSetup(context)
-                }
-                true
-            }.getOrElse { false }
         }
 
         AsyncFunction("findPrinters") { connectionType: String ->
