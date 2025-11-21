@@ -1,38 +1,70 @@
 package expo.modules.printers.rongta.network
 
+import android.content.Context
+import android.net.wifi.WifiManager
+import android.util.Log
 import com.rt.printerlibrary.ipscan.IpScanner
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 
-class RongtaNetworkScanner {
+class RongtaNetworkScanner(
+    private val context: Context
+) {
 
     fun scan(): Flow<IpScanner.DeviceBean> {
         return callbackFlow {
+            val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+            var multicastLock: WifiManager.MulticastLock? = null
+
+            // Acquire multicast lock for UDP broadcast
+            multicastLock = wifiManager?.createMulticastLock("RongtaNetworkScan")?.apply {
+                setReferenceCounted(true)
+                acquire()
+                Log.d(TAG, "Multicast lock acquired")
+            }
+
             val scanner = RongtaIpScanner(
                 object : RongtaIpScannerCallbacks {
                     override fun onSearchStart() {
-                        // Handle search start
+                        Log.d(TAG, "Rongta network scan started")
                     }
 
                     override fun onSearchFinish(devices: List<IpScanner.DeviceBean>) {
+                        Log.d(TAG, "Rongta network scan finished, found ${devices.size} devices")
                         devices.forEach { device ->
+                            Log.d(TAG, "Found device: IP=${device.deviceIp}, Port=${device.devicePort}, MAC=${device.macAddress}")
                             trySend(device)
                         }
+                        close()
                     }
 
                     override fun onSearchError(message: String) {
+                        Log.e(TAG, "Rongta network scan error: $message")
                         close(IllegalStateException(message))
                     }
                 }
             )
 
+            // Start the scanner thread
+            scanner.start()
+
             awaitClose {
                 runCatching {
                     scanner.interrupt()
+                    scanner.join(1000) // Wait up to 1 second for thread to finish
+                }
+                // Release multicast lock
+                if (multicastLock?.isHeld == true) {
+                    multicastLock.release()
+                    Log.d(TAG, "Multicast lock released")
                 }
             }
         }
+    }
+
+    companion object {
+        private const val TAG = "RongtaNetworkScanner"
     }
 
     private class RongtaIpScanner(

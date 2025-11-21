@@ -8,6 +8,7 @@ import type { PrinterConnectionType } from "./commons";
 
 declare class StarMicronicsPrintersModule extends NativeModule<StarMicronicsPrintersModuleEvents> {
   findPrinters(connectionType: PrinterConnectionType): Promise<boolean>;
+  connectManually(ipAddress: string, port?: number): Promise<StarMicronicsPrinterInfo>;
   printImage(
     base64Image: string,
     deviceData: StarMicronicsPrinterInfo,

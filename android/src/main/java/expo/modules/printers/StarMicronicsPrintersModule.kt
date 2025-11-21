@@ -41,6 +41,22 @@ class StarMicronicsPrintersModule : Module() {
             printerFinder = null
         }
 
+        AsyncFunction("connectManually") { ipAddress: String, port: Int? ->
+            runCatching {
+                val printerPort = port ?: 9100
+                val portName = "TCP:$ipAddress:$printerPort"
+                mapOf(
+                    "deviceName" to "Manual Connection",
+                    "portName" to portName,
+                    "macAddress" to "",
+                    "usbSerialNumber" to "",
+                    "connectionType" to "Network"
+                )
+            }.onFailure { e ->
+                Log.e(TAG, "Failed to create manual connection", e)
+            }.getOrNull()
+        }
+
         AsyncFunction("findPrinters") { connectionType: String ->
             runCatching {
                 val type = try {

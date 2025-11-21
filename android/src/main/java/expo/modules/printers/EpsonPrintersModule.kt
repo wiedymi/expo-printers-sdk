@@ -42,6 +42,23 @@ class EpsonPrintersModule : Module() {
             printerFinder = null
         }
 
+        AsyncFunction("connectManually") { ipAddress: String, port: Int? ->
+            runCatching {
+                val target = "TCP:$ipAddress"
+                mapOf(
+                    "deviceName" to "Manual Connection",
+                    "target" to target,
+                    "ipAddress" to ipAddress,
+                    "macAddress" to "",
+                    "bdAddress" to "",
+                    "connectionType" to "Network",
+                    "deviceType" to 0
+                )
+            }.onFailure { e ->
+                Log.e(TAG, "Failed to create manual connection", e)
+            }.getOrNull()
+        }
+
         AsyncFunction("findPrinters") { connectionType: String ->
             runCatching {
                 val type = try {

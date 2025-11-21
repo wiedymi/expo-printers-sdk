@@ -341,12 +341,16 @@ class RongtaPrinter(
         printerInterface.configObject = configBean
         printer.setPrinterInterface(printerInterface)
         // Disconnect if already connected (after interface is set)
-        if (printer.connectState == ConnectStateEnum.Connected) {
-            Log.i(TAG, "Printer already connected (Bluetooth). Disconnecting before reconnecting.")
-            runCatching { printer.disConnect() }
-                .onFailure { throwable ->
-                    Log.e(TAG, "Failed to disconnect printer before reconnecting (Bluetooth): $throwable")
-                }
+        runCatching {
+            if (printer.connectState == ConnectStateEnum.Connected) {
+                Log.i(TAG, "Printer already connected (Bluetooth). Disconnecting before reconnecting.")
+                runCatching { printer.disConnect() }
+                    .onFailure { throwable ->
+                        Log.e(TAG, "Failed to disconnect printer before reconnecting (Bluetooth): $throwable")
+                    }
+            }
+        }.onFailure { throwable ->
+            Log.e(TAG, "Failed to check connection state (Bluetooth): $throwable")
         }
         return ConfigurationResult.Success(configBean)
     }
@@ -361,12 +365,16 @@ class RongtaPrinter(
         printerInterface.configObject = configBean
         printer.setPrinterInterface(printerInterface)
         // Disconnect if already connected (after interface is set)
-        if (printer.connectState == ConnectStateEnum.Connected) {
-            Log.i(TAG, "Printer already connected (Network). Disconnecting before reconnecting.")
-            runCatching { printer.disConnect() }
-                .onFailure { throwable ->
-                    Log.e(TAG, "Failed to disconnect printer before reconnecting (Network): $throwable")
-                }
+        runCatching {
+            if (printer.connectState == ConnectStateEnum.Connected) {
+                Log.i(TAG, "Printer already connected (Network). Disconnecting before reconnecting.")
+                runCatching { printer.disConnect() }
+                    .onFailure { throwable ->
+                        Log.e(TAG, "Failed to disconnect printer before reconnecting (Network): $throwable")
+                    }
+            }
+        }.onFailure { throwable ->
+            Log.e(TAG, "Failed to check connection state (Network): $throwable")
         }
         return ConfigurationResult.Success(configBean)
     }
