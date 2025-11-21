@@ -52,8 +52,8 @@ class EpsonPrintersModule : Module() {
                     throw IllegalArgumentException(validation.message)
                 }
                 NetworkValidator.ValidationResult.Valid -> {
-                    // Epson SDK uses TCP:IP format (port handled internally)
-                    val target = "TCP:$ipAddress"
+                    // Epson SDK can target non-default ports using TCP:IP:PORT
+                    val target = "TCP:$ipAddress:$printerPort"
                     mapOf(
                         "deviceName" to "Manual Connection",
                         "target" to target,
