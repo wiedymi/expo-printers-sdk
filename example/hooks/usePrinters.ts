@@ -16,6 +16,11 @@ import type {
 import type { Manufacturer, PrinterInfo } from "../types/printer";
 import { deduplicatePrinters } from "../utils/printer-utils";
 
+type PrinterModule =
+  | typeof EpsonPrinters
+  | typeof RongtaPrinters
+  | typeof StarMicronicsPrinters;
+
 export const usePrinters = (manufacturer: Manufacturer) => {
   const [printers, setPrinters] = useState<PrinterInfo[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -53,27 +58,25 @@ export const usePrinters = (manufacturer: Manufacturer) => {
     []
   );
 
+  const getPrinterModule = (mfr: Manufacturer): PrinterModule => {
+    switch (mfr) {
+      case "EPSON":
+        return EpsonPrinters;
+      case "RONGTA":
+        return RongtaPrinters;
+      case "STAR":
+        return StarMicronicsPrinters;
+    }
+  };
+
   useEffect(() => {
     let foundListener: { remove: () => void } | null = null;
     let printListener: { remove: () => void } | null = null;
-    let mod: any;
 
-    switch (manufacturer) {
-      case "EPSON":
-        mod = EpsonPrinters;
-        break;
-      case "RONGTA":
-        mod = RongtaPrinters;
-        break;
-      case "STAR":
-        mod = StarMicronicsPrinters;
-        break;
-    }
+    const mod = getPrinterModule(manufacturer);
 
-    if (mod) {
-      foundListener = mod.addListener("onPrintersFound", handlePrintersFound);
-      printListener = mod.addListener("onPrintImage", handlePrintResult);
-    }
+    foundListener = mod.addListener("onPrintersFound", handlePrintersFound);
+    printListener = mod.addListener("onPrintImage", handlePrintResult);
 
     return () => {
       foundListener?.remove();
@@ -87,18 +90,8 @@ export const usePrinters = (manufacturer: Manufacturer) => {
       setIsSearching(true);
 
       try {
-        let result: boolean;
-        switch (manufacturer) {
-          case "EPSON":
-            result = await EpsonPrinters.findPrinters(connectionType);
-            break;
-          case "RONGTA":
-            result = await RongtaPrinters.findPrinters(connectionType);
-            break;
-          case "STAR":
-            result = await StarMicronicsPrinters.findPrinters(connectionType);
-            break;
-        }
+        const mod = getPrinterModule(manufacturer);
+        const result = await mod.findPrinters(connectionType);
         return result;
       } catch (error) {
         setIsSearching(false);
@@ -110,21 +103,8 @@ export const usePrinters = (manufacturer: Manufacturer) => {
 
   const connectManually = useCallback(
     async (ipAddress: string, port: number) => {
-      let printerInfo: any;
-      switch (manufacturer) {
-        case "EPSON":
-          printerInfo = await EpsonPrinters.connectManually(ipAddress, port);
-          break;
-        case "RONGTA":
-          printerInfo = await RongtaPrinters.connectManually(ipAddress, port);
-          break;
-        case "STAR":
-          printerInfo = await StarMicronicsPrinters.connectManually(
-            ipAddress,
-            port
-          );
-          break;
-      }
+      const mod = getPrinterModule(manufacturer);
+      const printerInfo = await mod.connectManually(ipAddress, port);
 
       if (printerInfo) {
         setPrinters((prev) =>

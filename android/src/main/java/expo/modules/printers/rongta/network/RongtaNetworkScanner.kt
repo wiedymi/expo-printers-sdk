@@ -11,17 +11,24 @@ import kotlinx.coroutines.flow.callbackFlow
 class RongtaNetworkScanner(
     private val context: Context
 ) {
+    private var multicastLock: WifiManager.MulticastLock? = null
 
     fun scan(): Flow<IpScanner.DeviceBean> {
         return callbackFlow {
             val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
-            var multicastLock: WifiManager.MulticastLock? = null
 
-            // Acquire multicast lock for UDP broadcast
-            multicastLock = wifiManager?.createMulticastLock("RongtaNetworkScan")?.apply {
-                setReferenceCounted(true)
-                acquire()
-                Log.d(TAG, "Multicast lock acquired")
+            // Acquire multicast lock for UDP broadcast (only during scan)
+            synchronized(this@RongtaNetworkScanner) {
+                if (multicastLock == null) {
+                    multicastLock = wifiManager?.createMulticastLock("RongtaNetworkScan")?.apply {
+                        setReferenceCounted(false)
+                    }
+                }
+
+                if (multicastLock?.isHeld == false) {
+                    multicastLock?.acquire()
+                    Log.d(TAG, "Multicast lock acquired")
+                }
             }
 
             val scanner = RongtaIpScanner(
@@ -36,11 +43,14 @@ class RongtaNetworkScanner(
                             Log.d(TAG, "Found device: IP=${device.deviceIp}, Port=${device.devicePort}, MAC=${device.macAddress}")
                             trySend(device)
                         }
+                        // Release lock immediately after scan completes
+                        releaseLock()
                         close()
                     }
 
                     override fun onSearchError(message: String) {
                         Log.e(TAG, "Rongta network scan error: $message")
+                        releaseLock()
                         close(IllegalStateException(message))
                     }
                 }
@@ -54,11 +64,16 @@ class RongtaNetworkScanner(
                     scanner.interrupt()
                     scanner.join(1000) // Wait up to 1 second for thread to finish
                 }
-                // Release multicast lock
-                if (multicastLock?.isHeld == true) {
-                    multicastLock.release()
-                    Log.d(TAG, "Multicast lock released")
-                }
+                releaseLock()
+            }
+        }
+    }
+
+    private fun releaseLock() {
+        synchronized(this) {
+            if (multicastLock?.isHeld == true) {
+                multicastLock?.release()
+                Log.d(TAG, "Multicast lock released")
             }
         }
     }

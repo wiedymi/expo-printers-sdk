@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.printers.commons.NetworkValidator
 import expo.modules.printers.commons.PrinterConnectionType
 import expo.modules.printers.commons.PrinterDeviceData
 import expo.modules.printers.commons.safeGetIntOrDefault
@@ -43,19 +44,24 @@ class RongtaPrintersModule : Module() {
         }
 
         AsyncFunction("connectManually") { ipAddress: String, port: Int? ->
-            runCatching {
-                val printerPort = port ?: 9100
-                mapOf(
-                    "connectionType" to "Network",
-                    "type" to mapOf(
-                        "type" to "NETWORK",
-                        "ipAddress" to ipAddress,
-                        "port" to printerPort
+            val printerPort = port ?: 9100
+
+            when (val validation = NetworkValidator.validateNetworkConnection(ipAddress, printerPort)) {
+                is NetworkValidator.ValidationResult.Error -> {
+                    Log.e(TAG, "Invalid network connection parameters: ${validation.message}")
+                    throw IllegalArgumentException(validation.message)
+                }
+                NetworkValidator.ValidationResult.Valid -> {
+                    mapOf(
+                        "connectionType" to "Network",
+                        "type" to mapOf(
+                            "type" to "NETWORK",
+                            "ipAddress" to ipAddress,
+                            "port" to printerPort
+                        )
                     )
-                )
-            }.onFailure { e ->
-                Log.e(TAG, "Failed to create manual connection", e)
-            }.getOrNull()
+                }
+            }
         }
 
         AsyncFunction("findPrinters") { connectionType: String ->

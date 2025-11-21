@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.printers.commons.NetworkValidator
 import expo.modules.printers.commons.PrinterConnectionType
 import expo.modules.printers.commons.PrinterDeviceData
 import expo.modules.printers.commons.safeGetString
@@ -42,19 +43,25 @@ class StarMicronicsPrintersModule : Module() {
         }
 
         AsyncFunction("connectManually") { ipAddress: String, port: Int? ->
-            runCatching {
-                val printerPort = port ?: 9100
-                val portName = "TCP:$ipAddress:$printerPort"
-                mapOf(
-                    "deviceName" to "Manual Connection",
-                    "portName" to portName,
-                    "macAddress" to "",
-                    "usbSerialNumber" to "",
-                    "connectionType" to "Network"
-                )
-            }.onFailure { e ->
-                Log.e(TAG, "Failed to create manual connection", e)
-            }.getOrNull()
+            val printerPort = port ?: 9100
+
+            when (val validation = NetworkValidator.validateNetworkConnection(ipAddress, printerPort)) {
+                is NetworkValidator.ValidationResult.Error -> {
+                    Log.e(TAG, "Invalid network connection parameters: ${validation.message}")
+                    throw IllegalArgumentException(validation.message)
+                }
+                NetworkValidator.ValidationResult.Valid -> {
+                    // Star SDK uses TCP:IP:PORT format for network printers
+                    val portName = "TCP:$ipAddress:$printerPort"
+                    mapOf(
+                        "deviceName" to "Manual Connection",
+                        "portName" to portName,
+                        "macAddress" to "",
+                        "usbSerialNumber" to "",
+                        "connectionType" to "Network"
+                    )
+                }
+            }
         }
 
         AsyncFunction("findPrinters") { connectionType: String ->
