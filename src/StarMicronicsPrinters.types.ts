@@ -6,6 +6,8 @@ export type StarMicronicsPrinterInfo = {
   macAddress: string;
   usbSerialNumber: string;
   connectionType: PrinterConnectionType;
+  isSupported: boolean;
+  unsupportedReason?: string;
 };
 
 export type StarMicronicsPrintResult = {

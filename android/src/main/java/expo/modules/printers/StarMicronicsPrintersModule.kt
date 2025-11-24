@@ -79,7 +79,9 @@ class StarMicronicsPrintersModule : Module() {
                             "portName" to deviceData.portName,
                             "macAddress" to deviceData.macAddress,
                             "usbSerialNumber" to deviceData.usbSerialNumber,
-                            "connectionType" to deviceData.connectionType.name
+                            "connectionType" to deviceData.connectionType.name,
+                            "isSupported" to deviceData.isSupported,
+                            "unsupportedReason" to (deviceData.unsupportedReason ?: "")
                         )
                     } ?: emptyList()
 
@@ -121,7 +123,7 @@ class StarMicronicsPrintersModule : Module() {
                             StarMicronicsPrintResult.ErrorCoverOpened -> "Printer cover is open"
                             StarMicronicsPrintResult.ErrorPaperEmpty -> "Printer is out of paper"
                             StarMicronicsPrintResult.ErrorPaperJam -> "Paper jam"
-                            StarMicronicsPrintResult.ErrorUnknown -> "Unknown error occurred"
+                            StarMicronicsPrintResult.ErrorUnknown -> "Unknown error. Check logs for printer model identification details."
                             StarMicronicsPrintResult.Success -> null
                             null -> "Printer not initialized"
                         }

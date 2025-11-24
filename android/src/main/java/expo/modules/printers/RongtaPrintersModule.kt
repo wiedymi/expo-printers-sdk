@@ -74,9 +74,13 @@ class RongtaPrintersModule : Module() {
                 }
                 coroutineScope.launch(Dispatchers.IO) {
                     val printers = printerFinder?.search(type)?.map { deviceData ->
+                        val baseMap = mapOf(
+                            "connectionType" to deviceData.connectionType.name,
+                            "isSupported" to deviceData.isSupported,
+                            "unsupportedReason" to (deviceData.unsupportedReason ?: "")
+                        )
                         when (deviceData.type) {
-                            is PrinterDeviceData.Rongta.Type.Bluetooth -> mapOf(
-                                "connectionType" to deviceData.connectionType.name,
+                            is PrinterDeviceData.Rongta.Type.Bluetooth -> baseMap + mapOf(
                                 "type" to mapOf(
                                     "type" to "BLUETOOTH",
                                     "alias" to deviceData.type.alias,
@@ -84,16 +88,14 @@ class RongtaPrintersModule : Module() {
                                     "address" to deviceData.type.address
                                 )
                             )
-                            is PrinterDeviceData.Rongta.Type.Network -> mapOf(
-                                "connectionType" to deviceData.connectionType.name,
+                            is PrinterDeviceData.Rongta.Type.Network -> baseMap + mapOf(
                                 "type" to mapOf(
                                     "type" to "NETWORK",
                                     "ipAddress" to deviceData.type.ipAddress,
                                     "port" to deviceData.type.port
                                 )
                             )
-                            is PrinterDeviceData.Rongta.Type.Usb -> mapOf(
-                                "connectionType" to deviceData.connectionType.name,
+                            is PrinterDeviceData.Rongta.Type.Usb -> baseMap + mapOf(
                                 "type" to mapOf(
                                     "type" to "USB",
                                     "name" to deviceData.type.name,

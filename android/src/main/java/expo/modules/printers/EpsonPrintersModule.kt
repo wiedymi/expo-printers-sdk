@@ -84,7 +84,9 @@ class EpsonPrintersModule : Module() {
                             "macAddress" to deviceData.macAddress,
                             "bdAddress" to deviceData.bdAddress,
                             "connectionType" to deviceData.connectionType.name,
-                            "deviceType" to deviceData.deviceType
+                            "deviceType" to deviceData.deviceType,
+                            "isSupported" to deviceData.isSupported,
+                            "unsupportedReason" to (deviceData.unsupportedReason ?: "")
                         )
                     } ?: emptyList()
 
