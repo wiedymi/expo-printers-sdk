@@ -3,6 +3,8 @@ import type { PrinterConnectionType } from "./commons";
 export type RongtaPrinterInfo = {
   connectionType: PrinterConnectionType;
   type: RongtaPrinterType;
+  isSupported: boolean;
+  unsupportedReason?: string;
 };
 
 export type RongtaPrinterType =

@@ -2,28 +2,30 @@
 
 A robust Expo (React Native) module for integrating thermal printers from multiple manufacturers into your Expo/React Native applications. Built with enterprise-grade error handling and production-ready reliability.
 
-## ✨ Features
+## Features
 
 - **Multi-Manufacturer Support**:
 
-  - ✅ **Epson** (TM series, compatible models)
-  - ✅ **Rongta** (RPP series, Bluetooth & Network)
-  - ✅ **Star Micronics** (TSP series, mPOP, etc.)
+  - **Epson** (TM series, compatible models)
+  - **Rongta** (RPP series, Bluetooth & Network)
+  - **Star Micronics** (TSP series, mPOP, etc.)
 
 - **Multiple Connection Types**:
 
-  - 🔵 **Bluetooth** - Wireless printing
-  - 🌐 **Network** - TCP/IP connection
-  - 🔌 **USB** - Direct USB connection
+  - **Bluetooth** - Wireless printing
+  - **Network** - TCP/IP connection with auto-discovery
+  - **USB** - Direct USB connection
+  - **Manual Network** - Direct IP/port connection (NEW!)
 
 - **Enterprise Features**:
-  - 🔍 **Smart Discovery** - Automatic printer detection
-  - 🖼️ **Image Printing** - High-quality thermal printing
-  - ⚡ **Event-Driven** - Real-time status updates
-  - 🛡️ **Robust Error Handling** - Production-ready reliability
-  - 📱 **Full Example App** - Complete implementation reference
+  - **Smart Discovery** - Automatic printer detection
+  - **Manual Connection** - Connect directly to known IP addresses
+  - **Image Printing** - High-quality thermal printing
+  - **Event-Driven** - Real-time status updates
+  - **Robust Error Handling** - Production-ready reliability
+  - **Full Example App** - Complete implementation reference
 
-## 🚀 Installation
+## Installation
 
 #### Add the package to your dependencies
 
@@ -35,12 +37,12 @@ bunx expo install expo-printers-sdk
 
 For bare React Native projects, you must ensure that you have [installed and configured the `expo` package](https://docs.expo.dev/bare/installing-expo-modules/) before continuing.
 
-## 📱 Platform Support
+## Platform Support
 
-- ✅ **Android** - Fully supported with native printer SDKs
-- ❌ **iOS** - Coming soon
+- **Android** - Fully supported with native printer SDKs
+- **iOS** - Maybe someday
 
-## 🔧 Setup & Configuration
+## Setup & Configuration
 
 ### Android Configuration
 
@@ -62,10 +64,11 @@ The following permissions are automatically included but need runtime requests:
 
 <!-- Network -->
 <uses-permission android:name="android.permission.INTERNET" />
-<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+<uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 ```
 
-## 📖 Quick Start Guide
+## Quick Start Guide
 
 ### 1. Import the modules
 
@@ -103,7 +106,7 @@ const requestPermissions = async () => {
 };
 ```
 
-### 3. Discover printers
+### 3. Discover printers (Auto-Discovery)
 
 ```typescript
 import { useEffect, useState } from "react";
@@ -128,6 +131,44 @@ const discoverPrinters = async () => {
   }
 };
 ```
+
+### 3b. Manual Connection (NEW!)
+
+If you already know your printer's IP address and port, you can connect directly without discovery:
+
+```typescript
+// Rongta
+const connectToPrinter = async () => {
+  try {
+    const printer = await RongtaPrinters.connectManually("Network", {
+      ipAddress: "192.168.1.100",
+      port: 9100,
+    });
+    console.log("Connected to printer:", printer);
+  } catch (error) {
+    console.error("Failed to connect:", error);
+  }
+};
+
+// Epson & Star require a model identifier so the SDK can select capabilities
+const epsonPrinter = await EpsonPrinters.connectManually("Network", {
+  ipAddress: "192.168.1.101",
+  port: 9100,
+  modelName: "TM-m30II",
+});
+const starPrinter = await StarMicronicsPrinters.connectManually("Network", {
+  ipAddress: "192.168.1.102",
+  port: 9100,
+  modelName: "mC-Print3",
+});
+```
+
+**When to use manual connection:**
+- You know the printer's IP address and port
+- The printer is on a different subnet
+- The printer doesn't respond to network discovery
+- You want faster connection without scanning
+- For **Epson** and **Star Micronics**, supply an exact supported model name (e.g. `TM-m30II`, `mC-Print3`) so the SDK can resolve capabilities; call `getSupportedModels()` to list valid values
 
 ### 4. Print images
 
@@ -185,15 +226,16 @@ const printImage = async (printer: EpsonPrinterInfo, imageUrl: string) => {
 };
 ```
 
-## 🎯 Complete Example
+## Complete Example
 
 Check out our comprehensive example app in the `/example` folder that demonstrates:
 
-- 🔍 **Multi-manufacturer printer discovery**
-- 🖼️ **Real image fetching and printing**
-- 📱 **Professional UI with loading states**
-- ⚠️ **Comprehensive error handling**
-- 🎨 **Modern React Native best practices**
+- **Multi-manufacturer printer discovery**
+- **Manual IP/port connection**
+- **Real image fetching and printing**
+- **Compact, modern UI**
+- **Comprehensive error handling**
+- **Modern React Native best practices**
 
 ### Running the Example
 
@@ -203,7 +245,7 @@ npm install
 npm run android
 ```
 
-## 📚 API Reference
+## API Reference
 
 ### Connection Types
 
@@ -211,14 +253,14 @@ npm run android
 type PrinterConnectionType = "Bluetooth" | "Network" | "USB";
 ```
 
-### 🖨️ Epson Printers
+### Epson Printers
 
 #### Types
 
 ```typescript
 type EpsonPrinterInfo = {
   deviceName: string; // e.g., "TM-T88V"
-  target: string; // Connection target (BT:MAC or IP:PORT)
+  target: string; // Connection target (BT:MAC or TCP:IP)
   ipAddress: string; // IP address for network printers
   macAddress: string; // MAC address for Bluetooth
   bdAddress: string; // Bluetooth device address
@@ -243,6 +285,15 @@ type EpsonPrintersModuleEvents = {
 // Discover available printers
 EpsonPrinters.findPrinters(connectionType: PrinterConnectionType): Promise<boolean>
 
+// Connect manually to a network printer
+EpsonPrinters.connectManually(
+  connectionType: PrinterConnectionType,
+  connectionDetails: { ipAddress: string; port?: number; modelName?: string }
+): Promise<EpsonPrinterInfo>
+
+// Get list of supported printer models
+EpsonPrinters.getSupportedModels(): Promise<string[]>
+
 // Print base64 image to printer
 EpsonPrinters.printImage(base64Image: string, deviceData: EpsonPrinterInfo): Promise<boolean>
 
@@ -250,7 +301,7 @@ EpsonPrinters.printImage(base64Image: string, deviceData: EpsonPrinterInfo): Pro
 EpsonPrinters.addListener(eventName: string, listener: Function): EventSubscription
 ```
 
-### 🖨️ Rongta Printers
+### Rongta Printers
 
 #### Types
 
@@ -258,6 +309,8 @@ EpsonPrinters.addListener(eventName: string, listener: Function): EventSubscript
 type RongtaPrinterInfo = {
   connectionType: PrinterConnectionType;
   type: RongtaPrinterType;
+  isSupported: boolean;
+  unsupportedReason?: string;
 };
 
 type RongtaPrinterType =
@@ -270,7 +323,13 @@ type RongtaPrinterType =
   | {
       type: "NETWORK";
       ipAddress: string; // IP address
-      port: number; // TCP port (usually 9100)
+      port: number; // TCP port (default 9100)
+    }
+  | {
+      type: "USB";
+      name: string; // Device name
+      vendorId: number; // USB vendor ID
+      productId: number; // USB product ID
     };
 
 type RongtaPrintResult = {
@@ -285,18 +344,24 @@ type RongtaPrintResult = {
 // Discover available printers
 RongtaPrinters.findPrinters(connectionType: PrinterConnectionType): Promise<boolean>
 
+// Connect manually to a network printer
+RongtaPrinters.connectManually(
+  connectionType: PrinterConnectionType,
+  connectionDetails: { ipAddress: string; port?: number }
+): Promise<RongtaPrinterInfo>
+
 // Print base64 image to printer
 RongtaPrinters.printImage(base64Image: string, deviceData: RongtaPrinterInfo): Promise<boolean>
 ```
 
-### 🖨️ Star Micronics Printers
+### Star Micronics Printers
 
 #### Types
 
 ```typescript
 type StarMicronicsPrinterInfo = {
   deviceName: string; // e.g., "TSP100"
-  portName: string; // Port identifier (TCP:IP or BT:MAC)
+  portName: string; // Port identifier (TCP:IP:PORT or BT:MAC)
   macAddress: string; // MAC address
   usbSerialNumber: string; // USB serial (if applicable)
   connectionType: PrinterConnectionType;
@@ -314,11 +379,20 @@ type StarMicronicsPrintResult = {
 // Discover available printers
 StarMicronicsPrinters.findPrinters(connectionType: PrinterConnectionType): Promise<boolean>
 
+// Connect manually to a network printer
+StarMicronicsPrinters.connectManually(
+  connectionType: PrinterConnectionType,
+  connectionDetails: { ipAddress: string; port?: number; modelName?: string }
+): Promise<StarMicronicsPrinterInfo>
+
+// Get list of supported printer models
+StarMicronicsPrinters.getSupportedModels(): Promise<string[]>
+
 // Print base64 image to printer
 StarMicronicsPrinters.printImage(base64Image: string, deviceData: StarMicronicsPrinterInfo): Promise<boolean>
 ```
 
-## 🛡️ Error Handling Best Practices
+## Error Handling Best Practices
 
 The SDK includes comprehensive error handling with specific error messages:
 
@@ -347,7 +421,7 @@ try {
 - **Invalid Image**: Verify base64 image format and size
 - **Connection Failed**: Check printer pairing or network settings
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### Bluetooth Issues
 
@@ -358,10 +432,29 @@ try {
 
 ### Network Issues
 
-- Verify printer IP address and port
-- Check network connectivity
-- Ensure printer and device are on same network
-- Test printer via web interface if available
+- **Auto-Discovery not finding printers?**
+  - Ensure printer and device are on same subnet
+  - Check if printer supports network discovery
+  - Try using `connectManually()` with known IP address
+  - Verify multicast is enabled on your network
+
+- **Manual connection issues:**
+  - Verify printer IP address is correct (use `ping` to test)
+  - Check port number (default is 9100 for most printers)
+  - Ensure printer is powered on and connected to network
+  - Test printer via web interface if available
+
+### Rongta Network Discovery
+
+Rongta network discovery requires:
+- Device and printer on the **same subnet** (e.g., both on 192.168.1.x)
+- WiFi **multicast** enabled (automatically handled by SDK)
+- Printer must respond to UDP broadcast on port 1460
+
+**If auto-discovery doesn't work:**
+1. Use `connectManually()` with the printer's IP address
+2. Verify printer is network-accessible: `ping <printer-ip>`
+3. Check printer port: `telnet <printer-ip> 9100`
 
 ### Image Printing Issues
 
@@ -370,7 +463,32 @@ try {
 - Ensure image file size is reasonable
 - Test with simple black and white images first
 
-## 🤝 Contributing
+## Recent Updates
+
+### v0.9.5 (Latest)
+
+- **Manual Network Connection** - Connect directly to printers by IP/port
+  - `connectManually(ipAddress, port)` method for all printer types
+  - Bypass network discovery for known printers
+  - Support for different subnets
+
+- **Improved Network Discovery**
+  - Fixed Rongta network scanner startup issue
+  - Added multicast lock support for UDP broadcasts
+  - Enhanced logging and debugging capabilities
+
+- **Enhanced Reliability**
+  - Safer connection state checks
+  - Better error handling for edge cases
+  - Fixed crashes during print configuration
+
+- **Improved Example App**
+  - Compact, modern UI design
+  - Integrated auto-discovery and manual connection
+  - Better UX with mode toggles
+  - Simplified error messages
+
+## Contributing
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
@@ -387,15 +505,21 @@ npm install
 npm run android
 ```
 
-## 📋 Changelog
+## Version History
 
-### Latest Version
+### v0.9.5
+- Added manual network connection API
+- Fixed Rongta network scanner
+- Improved error handling
+- Redesigned example app UI
 
-- ✅ **Enhanced Error Handling** - Comprehensive error messages and recovery
-- ✅ **Image Fetching** - Built-in URL to base64 conversion
-- ✅ **Type Safety** - Full TypeScript support with strict typing
-- ✅ **Production Ready** - Extensive testing and validation
-- ✅ **Modern Example** - Complete demo app with best practices
+### Previous Versions
+- Enhanced Error Handling - Comprehensive error messages and recovery
+- Image Fetching - Built-in URL to base64 conversion
+- Type Safety - Full TypeScript support with strict typing
+- Production Ready - Extensive testing and validation
+- Modern Example - Complete demo app with best practices
 
+---
 
-**Built with ❤️ for the React Native community**
+**Built with love for the React Native community**

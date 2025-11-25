@@ -27,15 +27,20 @@ class StarMicronicsPrinter(
         deviceData: PrinterDeviceData.Star
     ): StarMicronicsPrintResult = coroutineScope {
         // Try to identify printer using model name
+        Log.d(TAG, "Attempting to identify printer - modelName: '${deviceData.modelName}', portName: '${deviceData.portName}', macAddress: '${deviceData.macAddress}'")
+
         var modelIndex = StarModelCapability.getModelIdx(deviceData.modelName)
+        Log.d(TAG, "getModelIdx result: $modelIndex")
+
         // It could have happen for some BT printers when they don't provide model name
         if (modelIndex == StarModelCapability.NONE) {
             // So user can specify model manually
             modelIndex = StarModelCapability.getModelIdxByTitle(deviceData.modelName)
+            Log.d(TAG, "getModelIdxByTitle result: $modelIndex")
         }
 
         if (modelIndex == StarModelCapability.NONE) {
-            Log.e(TAG, "unknown printer model - $deviceData")
+            Log.e(TAG, "Failed to identify printer model from modelName: '${deviceData.modelName}'. Supported models: ${StarModelCapability.getSupportedModels()}")
             return@coroutineScope StarMicronicsPrintResult.ErrorUnknown
         }
 

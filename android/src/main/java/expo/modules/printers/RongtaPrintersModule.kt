@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.printers.commons.NetworkValidator
 import expo.modules.printers.commons.PrinterConnectionType
 import expo.modules.printers.commons.PrinterDeviceData
 import expo.modules.printers.commons.safeGetIntOrDefault
@@ -42,6 +43,35 @@ class RongtaPrintersModule : Module() {
             printerFinder = null
         }
 
+        AsyncFunction("connectManually") { connectionType: String, connectionDetails: Map<String, Any> ->
+            val type = connectionType.toPrinterConnectionType()
+            if (type != PrinterConnectionType.Network) {
+                throw IllegalArgumentException("Manual connection supports Network only for Rongta")
+            }
+
+            val ipAddress = connectionDetails.safeGetString("ipAddress", "IP address")
+            val printerPort = connectionDetails.safeGetIntOrDefault("port", 9100)
+
+            when (val validation = NetworkValidator.validateNetworkConnection(ipAddress, printerPort)) {
+                is NetworkValidator.ValidationResult.Error -> {
+                    Log.e(TAG, "Invalid network connection parameters: ${validation.message}")
+                    throw IllegalArgumentException(validation.message)
+                }
+                NetworkValidator.ValidationResult.Valid -> {
+                    mapOf(
+                        "connectionType" to "Network",
+                        "isSupported" to true,
+                        "unsupportedReason" to "",
+                        "type" to mapOf(
+                            "type" to "NETWORK",
+                            "ipAddress" to ipAddress,
+                            "port" to printerPort
+                        )
+                    )
+                }
+            }
+        }
+
         AsyncFunction("findPrinters") { connectionType: String ->
             runCatching {
                 val type = try {
@@ -52,9 +82,13 @@ class RongtaPrintersModule : Module() {
                 }
                 coroutineScope.launch(Dispatchers.IO) {
                     val printers = printerFinder?.search(type)?.map { deviceData ->
+                        val baseMap = mapOf(
+                            "connectionType" to deviceData.connectionType.name,
+                            "isSupported" to deviceData.isSupported,
+                            "unsupportedReason" to (deviceData.unsupportedReason ?: "")
+                        )
                         when (deviceData.type) {
-                            is PrinterDeviceData.Rongta.Type.Bluetooth -> mapOf(
-                                "connectionType" to deviceData.connectionType.name,
+                            is PrinterDeviceData.Rongta.Type.Bluetooth -> baseMap + mapOf(
                                 "type" to mapOf(
                                     "type" to "BLUETOOTH",
                                     "alias" to deviceData.type.alias,
@@ -62,16 +96,14 @@ class RongtaPrintersModule : Module() {
                                     "address" to deviceData.type.address
                                 )
                             )
-                            is PrinterDeviceData.Rongta.Type.Network -> mapOf(
-                                "connectionType" to deviceData.connectionType.name,
+                            is PrinterDeviceData.Rongta.Type.Network -> baseMap + mapOf(
                                 "type" to mapOf(
                                     "type" to "NETWORK",
                                     "ipAddress" to deviceData.type.ipAddress,
                                     "port" to deviceData.type.port
                                 )
                             )
-                            is PrinterDeviceData.Rongta.Type.Usb -> mapOf(
-                                "connectionType" to deviceData.connectionType.name,
+                            is PrinterDeviceData.Rongta.Type.Usb -> baseMap + mapOf(
                                 "type" to mapOf(
                                     "type" to "USB",
                                     "name" to deviceData.type.name,
@@ -143,6 +175,7 @@ class RongtaPrintersModule : Module() {
                             RongtaPrintResult.ErrorConnection -> "Failed to connect to printer"
                             RongtaPrintResult.ErrorPermission -> "No permission to access printer"
                             RongtaPrintResult.ErrorPrint -> "Failed to print receipt"
+                            RongtaPrintResult.ErrorTimeout -> "Connection timed out - printer may be unresponsive"
                             RongtaPrintResult.ErrorUnknown -> "Unknown error occurred"
                             RongtaPrintResult.Success -> null
                             null -> "Printer not initialized"

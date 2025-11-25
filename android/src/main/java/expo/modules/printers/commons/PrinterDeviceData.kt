@@ -12,6 +12,8 @@ sealed class PrinterDeviceData {
         val ipAddress: String,
         val macAddress: String,
         val bdAddress: String,
+        val isSupported: Boolean = true,
+        val unsupportedReason: String? = null,
     ) : PrinterDeviceData()
 
     data class Star(
@@ -20,11 +22,15 @@ sealed class PrinterDeviceData {
         val portName: String,
         val macAddress: String,
         val usbSerialNumber: String,
+        val isSupported: Boolean = true,
+        val unsupportedReason: String? = null,
     ) : PrinterDeviceData()
 
     data class Rongta(
         override val connectionType: PrinterConnectionType,
         val type: Type,
+        val isSupported: Boolean = true,
+        val unsupportedReason: String? = null,
     ) : PrinterDeviceData() {
 
         sealed class Type {

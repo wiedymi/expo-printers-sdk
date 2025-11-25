@@ -39,6 +39,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.ByteArrayInputStream
 import kotlin.coroutines.resume
+import kotlin.time.Duration.Companion.seconds
 import androidx.core.graphics.scale
 
 internal typealias PrinterConfigBean = Any
@@ -82,11 +83,15 @@ class RongtaPrinter(
         }.getOrNull() ?: return RongtaPrintResult.ErrorInvalidImage.also {
             Log.e(TAG, "failed to decode image")
         }
-        Log.i(TAG, "sendPrintJob: Image decoded, starting print coroutine")
+        Log.i(TAG, "sendPrintJob: Image decoded, starting print coroutine with ${CONNECTION_TIMEOUT.inWholeSeconds}s timeout")
         val result = suspendCancellableCoroutine { continuation ->
             val isCompleted = java.util.concurrent.atomic.AtomicBoolean(false)
+            var connectionTimeoutRunnable: Runnable? = null
+
             fun completeOnce(result: RongtaPrintResult) {
                 if (isCompleted.compareAndSet(false, true)) {
+                    // Cancel connection timeout if still pending
+                    connectionTimeoutRunnable?.let { handler.removeCallbacks(it) }
                     printer.setPrintListener(null)
                     printer.setConnectListener(null)
                     if (printer.connectState == ConnectStateEnum.Connected) {
@@ -99,8 +104,18 @@ class RongtaPrinter(
                     continuation.resumeWith(Result.success(result))
                 }
             }
+
+            // Schedule connection timeout
+            connectionTimeoutRunnable = Runnable {
+                Log.e(TAG, "CONNECTION TIMEOUT: onPrinterConnected never fired after ${CONNECTION_TIMEOUT.inWholeSeconds}s")
+                completeOnce(RongtaPrintResult.ErrorTimeout)
+            }
+            handler.postDelayed(connectionTimeoutRunnable!!, CONNECTION_TIMEOUT.inWholeMilliseconds)
+
             printer.setConnectListener(object : ConnectListener {
                 override fun onPrinterConnected(configObj: Any?) {
+                    // Cancel connection timeout since we connected successfully
+                    connectionTimeoutRunnable?.let { handler.removeCallbacks(it) }
                     Log.i(TAG, "onPrinterConnected: $configObj, connectState: ${printer.connectState}, thread: ${Thread.currentThread().name}")
                     val printingCommand = createImagePrintCommand(img)
                     if (printingCommand == null) {
@@ -147,6 +162,8 @@ class RongtaPrinter(
             }
             continuation.invokeOnCancellation {
                 Log.i(TAG, "canceling printing - connection state ${printer.connectState}")
+                // Cancel connection timeout on cancellation
+                connectionTimeoutRunnable?.let { handler.removeCallbacks(it) }
                 if (printer.connectState == ConnectStateEnum.Connected) {
                     runCatching { printer.disConnect() }
                         .onFailure { throwable ->
@@ -247,7 +264,18 @@ class RongtaPrinter(
         val printerInterface = usbFactory.create()
         printerInterface.configObject = configBean
         printer.setPrinterInterface(printerInterface)
-        // (No disconnect logic for USB, as connectState is not safe to access)
+        // Disconnect if already connected (after interface is set)
+        runCatching {
+            if (printer.connectState == ConnectStateEnum.Connected) {
+                Log.i(TAG, "Printer already connected (USB). Disconnecting before reconnecting.")
+                runCatching { printer.disConnect() }
+                    .onFailure { throwable ->
+                        Log.e(TAG, "Failed to disconnect printer before reconnecting (USB): $throwable")
+                    }
+            }
+        }.onFailure { throwable ->
+            Log.e(TAG, "Failed to check connection state (USB): $throwable")
+        }
         Log.i(TAG, "USB printer configured: $usbDevice, configBean: $configBean, printerInterface: $printerInterface")
         return ConfigurationResult.Success(configBean)
     }
@@ -300,15 +328,11 @@ class RongtaPrinter(
             Log.i(TAG, "requestUsbPermission: Could not get currentActivity, using appContext. Reason: ${e.message}")
             appContext
         }
+        // USB permission broadcasts come from the system, so we need RECEIVER_EXPORTED
         if (Build.VERSION.SDK_INT >= 33) {
-            contextToRegister.registerReceiver(receiver, IntentFilter(usbPermissionAction), Context.RECEIVER_NOT_EXPORTED)
+            contextToRegister.registerReceiver(receiver, IntentFilter(usbPermissionAction), Context.RECEIVER_EXPORTED)
         } else {
-            ContextCompat.registerReceiver(
-                contextToRegister,
-                receiver,
-                IntentFilter(usbPermissionAction),
-                ContextCompat.RECEIVER_NOT_EXPORTED
-            )
+            contextToRegister.registerReceiver(receiver, IntentFilter(usbPermissionAction))
         }
         Log.i(TAG, "requestUsbPermission: Requesting permission for device: $usbDevice")
         usbManager.requestPermission(usbDevice, permissionIntent)
@@ -341,12 +365,16 @@ class RongtaPrinter(
         printerInterface.configObject = configBean
         printer.setPrinterInterface(printerInterface)
         // Disconnect if already connected (after interface is set)
-        if (printer.connectState == ConnectStateEnum.Connected) {
-            Log.i(TAG, "Printer already connected (Bluetooth). Disconnecting before reconnecting.")
-            runCatching { printer.disConnect() }
-                .onFailure { throwable ->
-                    Log.e(TAG, "Failed to disconnect printer before reconnecting (Bluetooth): $throwable")
-                }
+        runCatching {
+            if (printer.connectState == ConnectStateEnum.Connected) {
+                Log.i(TAG, "Printer already connected (Bluetooth). Disconnecting before reconnecting.")
+                runCatching { printer.disConnect() }
+                    .onFailure { throwable ->
+                        Log.e(TAG, "Failed to disconnect printer before reconnecting (Bluetooth): $throwable")
+                    }
+            }
+        }.onFailure { throwable ->
+            Log.e(TAG, "Failed to check connection state (Bluetooth): $throwable")
         }
         return ConfigurationResult.Success(configBean)
     }
@@ -361,12 +389,16 @@ class RongtaPrinter(
         printerInterface.configObject = configBean
         printer.setPrinterInterface(printerInterface)
         // Disconnect if already connected (after interface is set)
-        if (printer.connectState == ConnectStateEnum.Connected) {
-            Log.i(TAG, "Printer already connected (Network). Disconnecting before reconnecting.")
-            runCatching { printer.disConnect() }
-                .onFailure { throwable ->
-                    Log.e(TAG, "Failed to disconnect printer before reconnecting (Network): $throwable")
-                }
+        runCatching {
+            if (printer.connectState == ConnectStateEnum.Connected) {
+                Log.i(TAG, "Printer already connected (Network). Disconnecting before reconnecting.")
+                runCatching { printer.disConnect() }
+                    .onFailure { throwable ->
+                        Log.e(TAG, "Failed to disconnect printer before reconnecting (Network): $throwable")
+                    }
+            }
+        }.onFailure { throwable ->
+            Log.e(TAG, "Failed to check connection state (Network): $throwable")
         }
         return ConfigurationResult.Success(configBean)
     }
@@ -374,5 +406,6 @@ class RongtaPrinter(
     companion object {
         private const val TAG = "RongtaPrinter"
         private const val MAX_PRINTER_WIDTH = 576
+        private val CONNECTION_TIMEOUT = 30.seconds
     }
 }

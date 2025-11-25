@@ -8,6 +8,8 @@ export type EpsonPrinterInfo = {
   bdAddress: string;
   connectionType: PrinterConnectionType;
   deviceType: number;
+  isSupported: boolean;
+  unsupportedReason?: string;
 };
 
 export type EpsonPrintResult = {

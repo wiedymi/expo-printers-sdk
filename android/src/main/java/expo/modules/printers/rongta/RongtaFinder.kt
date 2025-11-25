@@ -22,7 +22,7 @@ class RongtaFinder(
 ) : PrinterFinder<PrinterDeviceData.Rongta> {
 
     private val bluetoothScanner = RongtaBluetoothScanner(appContext)
-    private val networkScanner = RongtaNetworkScanner()
+    private val networkScanner = RongtaNetworkScanner(appContext)
 
     @RequiresPermission(allOf = [Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN])
     override suspend fun search(connectionType: PrinterConnectionType): List<PrinterDeviceData.Rongta> =
@@ -62,9 +62,11 @@ class RongtaFinder(
     }
 
     private suspend fun searchNetworkPrinters(): List<PrinterDeviceData.Rongta> {
+        Log.i(TAG, "Rongta network scanning...")
         return runCatching {
             networkScanner.scan().toSet().toList()
                 .map { device ->
+                    Log.d(TAG, "Network printer found: ${device.deviceIp}:${device.devicePort}")
                     PrinterDeviceData.Rongta(
                         connectionType = PrinterConnectionType.Network,
                         type = PrinterDeviceData.Rongta.Type.Network(

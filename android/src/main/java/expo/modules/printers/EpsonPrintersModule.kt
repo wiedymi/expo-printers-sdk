@@ -4,15 +4,18 @@ import android.content.Context
 import android.util.Log
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.printers.commons.NetworkValidator
 import expo.modules.printers.commons.PrinterConnectionType
 import expo.modules.printers.commons.PrinterDeviceData
 import expo.modules.printers.commons.safeGetInt
+import expo.modules.printers.commons.safeGetIntOrDefault
 import expo.modules.printers.commons.safeGetString
 import expo.modules.printers.commons.safeGetStringOrDefault
 import expo.modules.printers.commons.toPrinterConnectionType
 import expo.modules.printers.epson.EpsonPrinter
 import expo.modules.printers.epson.EpsonPrinterFinder
 import expo.modules.printers.epson.EpsonPrintResult
+import expo.modules.printers.epson.internals.EpsonModelCapability
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -42,6 +45,44 @@ class EpsonPrintersModule : Module() {
             printerFinder = null
         }
 
+        AsyncFunction("connectManually") { connectionType: String, connectionDetails: Map<String, Any> ->
+            val type = connectionType.toPrinterConnectionType()
+            if (type != PrinterConnectionType.Network) {
+                throw IllegalArgumentException("Manual connection supports Network only for Epson")
+            }
+
+            val ipAddress = connectionDetails.safeGetString("ipAddress", "IP address")
+            val printerPort = connectionDetails.safeGetIntOrDefault("port", 9100)
+            val modelName = connectionDetails.safeGetString("modelName", "modelName")
+
+            if (EpsonModelCapability.printerSeriesByName(modelName) == EpsonModelCapability.UNKNOWN) {
+                val supported = EpsonModelCapability.getSupportedModels().joinToString()
+                throw IllegalArgumentException("Unsupported Epson model: $modelName. Supported models: $supported")
+            }
+
+            when (val validation = NetworkValidator.validateNetworkConnection(ipAddress, printerPort)) {
+                is NetworkValidator.ValidationResult.Error -> {
+                    Log.e(TAG, "Invalid network connection parameters: ${validation.message}")
+                    throw IllegalArgumentException(validation.message)
+                }
+                NetworkValidator.ValidationResult.Valid -> {
+                    // Epson SDK can target non-default ports using TCP:IP:PORT
+                    val target = "TCP:$ipAddress:$printerPort"
+                    mapOf(
+                        "deviceName" to modelName,
+                        "target" to target,
+                        "ipAddress" to ipAddress,
+                        "macAddress" to "",
+                        "bdAddress" to "",
+                        "connectionType" to PrinterConnectionType.Network.name,
+                        "deviceType" to 0,
+                        "isSupported" to true,
+                        "unsupportedReason" to ""
+                    )
+                }
+            }
+        }
+
         AsyncFunction("findPrinters") { connectionType: String ->
             runCatching {
                 val type = try {
@@ -59,7 +100,9 @@ class EpsonPrintersModule : Module() {
                             "macAddress" to deviceData.macAddress,
                             "bdAddress" to deviceData.bdAddress,
                             "connectionType" to deviceData.connectionType.name,
-                            "deviceType" to deviceData.deviceType
+                            "deviceType" to deviceData.deviceType,
+                            "isSupported" to deviceData.isSupported,
+                            "unsupportedReason" to (deviceData.unsupportedReason ?: "")
                         )
                     } ?: emptyList()
 
@@ -69,6 +112,10 @@ class EpsonPrintersModule : Module() {
             }.onFailure { e ->
                 Log.e(TAG, "Failed to find printers", e)
             }.getOrElse { false }
+        }
+
+        AsyncFunction("getSupportedModels") {
+            EpsonModelCapability.getSupportedModels()
         }
 
         AsyncFunction("printImage") { base64Image: String, deviceData: Map<String, Any> ->
