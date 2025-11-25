@@ -60,6 +60,8 @@ class RongtaPrintersModule : Module() {
                 NetworkValidator.ValidationResult.Valid -> {
                     mapOf(
                         "connectionType" to "Network",
+                        "isSupported" to true,
+                        "unsupportedReason" to "",
                         "type" to mapOf(
                             "type" to "NETWORK",
                             "ipAddress" to ipAddress,
@@ -173,6 +175,7 @@ class RongtaPrintersModule : Module() {
                             RongtaPrintResult.ErrorConnection -> "Failed to connect to printer"
                             RongtaPrintResult.ErrorPermission -> "No permission to access printer"
                             RongtaPrintResult.ErrorPrint -> "Failed to print receipt"
+                            RongtaPrintResult.ErrorTimeout -> "Connection timed out - printer may be unresponsive"
                             RongtaPrintResult.ErrorUnknown -> "Unknown error occurred"
                             RongtaPrintResult.Success -> null
                             null -> "Printer not initialized"

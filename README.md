@@ -285,8 +285,14 @@ type EpsonPrintersModuleEvents = {
 // Discover available printers
 EpsonPrinters.findPrinters(connectionType: PrinterConnectionType): Promise<boolean>
 
-// Connect manually to a network printer (NEW!)
-EpsonPrinters.connectManually(ipAddress: string, port?: number): Promise<EpsonPrinterInfo>
+// Connect manually to a network printer
+EpsonPrinters.connectManually(
+  connectionType: PrinterConnectionType,
+  connectionDetails: { ipAddress: string; port?: number; modelName?: string }
+): Promise<EpsonPrinterInfo>
+
+// Get list of supported printer models
+EpsonPrinters.getSupportedModels(): Promise<string[]>
 
 // Print base64 image to printer
 EpsonPrinters.printImage(base64Image: string, deviceData: EpsonPrinterInfo): Promise<boolean>
@@ -303,6 +309,8 @@ EpsonPrinters.addListener(eventName: string, listener: Function): EventSubscript
 type RongtaPrinterInfo = {
   connectionType: PrinterConnectionType;
   type: RongtaPrinterType;
+  isSupported: boolean;
+  unsupportedReason?: string;
 };
 
 type RongtaPrinterType =
@@ -336,8 +344,11 @@ type RongtaPrintResult = {
 // Discover available printers
 RongtaPrinters.findPrinters(connectionType: PrinterConnectionType): Promise<boolean>
 
-// Connect manually to a network printer (NEW!)
-RongtaPrinters.connectManually(ipAddress: string, port?: number): Promise<RongtaPrinterInfo>
+// Connect manually to a network printer
+RongtaPrinters.connectManually(
+  connectionType: PrinterConnectionType,
+  connectionDetails: { ipAddress: string; port?: number }
+): Promise<RongtaPrinterInfo>
 
 // Print base64 image to printer
 RongtaPrinters.printImage(base64Image: string, deviceData: RongtaPrinterInfo): Promise<boolean>
@@ -368,8 +379,14 @@ type StarMicronicsPrintResult = {
 // Discover available printers
 StarMicronicsPrinters.findPrinters(connectionType: PrinterConnectionType): Promise<boolean>
 
-// Connect manually to a network printer (NEW!)
-StarMicronicsPrinters.connectManually(ipAddress: string, port?: number): Promise<StarMicronicsPrinterInfo>
+// Connect manually to a network printer
+StarMicronicsPrinters.connectManually(
+  connectionType: PrinterConnectionType,
+  connectionDetails: { ipAddress: string; port?: number; modelName?: string }
+): Promise<StarMicronicsPrinterInfo>
+
+// Get list of supported printer models
+StarMicronicsPrinters.getSupportedModels(): Promise<string[]>
 
 // Print base64 image to printer
 StarMicronicsPrinters.printImage(base64Image: string, deviceData: StarMicronicsPrinterInfo): Promise<boolean>

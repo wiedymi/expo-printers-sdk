@@ -7,6 +7,7 @@ import android.util.Log
 import expo.modules.printers.commons.PrinterConnectionType
 import expo.modules.printers.commons.PrinterDeviceData
 import expo.modules.printers.commons.PrinterFinder
+import expo.modules.printers.starmicronics.internals.StarModelCapability
 import com.starmicronics.stario.StarIOPort
 import com.starmicronics.stario.StarIOPortException
 import kotlinx.coroutines.coroutineScope

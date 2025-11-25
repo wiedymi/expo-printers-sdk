@@ -7,4 +7,5 @@ enum class RongtaPrintResult {
     ErrorUnknown,
     ErrorInvalidImage,
     ErrorPrint,
+    ErrorTimeout,
 }

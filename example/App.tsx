@@ -11,9 +11,11 @@ import type { PrinterConnectionType } from "expo-printers-sdk";
 import type { Manufacturer, PrinterInfo } from "./types/printer";
 import { usePrinters } from "./hooks/usePrinters";
 import { usePermissions } from "./hooks/usePermissions";
+import { useLogs } from "./hooks/useLogs";
 import { fetchImageAsBase64, getUniquePrinterId } from "./utils/printer-utils";
 import CompactPrinterSelector from "./components/compact-printer-selector";
 import PrinterList from "./components/printer-list";
+import LogViewer from "./components/log-viewer";
 
 const TEST_IMAGE_URL = "https://placehold.co/600x400/000000/FFFFFF.png";
 
@@ -29,6 +31,7 @@ export default function App() {
   const [selectedManufacturer, setSelectedManufacturer] =
     useState<Manufacturer>("RONGTA");
 
+  const { logs, clearLogs } = useLogs();
   const { isRequestingPermissions, requestPermissions } = usePermissions();
   const {
     printers,
@@ -43,12 +46,17 @@ export default function App() {
 
   const handleSearch = async () => {
     try {
+      console.log(`[Search] Starting ${selectedManufacturer} ${selectedConnectionType} search...`);
       const hasPermissions = await requestPermissions();
-      if (!hasPermissions) return;
+      if (!hasPermissions) {
+        console.warn("[Search] Permissions not granted");
+        return;
+      }
 
       await searchPrinters(selectedConnectionType);
+      console.log(`[Search] Search initiated for ${selectedConnectionType}`);
     } catch (error) {
-      console.error("Failed to find printers:", error);
+      console.error("[Search] Failed:", error);
       Alert.alert("Error", "Failed to find printers. Please try again.");
     }
   };
@@ -59,30 +67,40 @@ export default function App() {
     port: number
   ) => {
     try {
+      console.log(`[Manual] Connecting to ${selectedManufacturer} @ ${ipAddress}:${port}...`);
       const printerInfo = await connectManually(ipAddress, modelName, port);
       if (printerInfo) {
+        console.log("[Manual] Connected successfully:", printerInfo);
         Alert.alert(
           "Connected",
           `${selectedManufacturer} ${modelName} @ ${ipAddress}:${port}`
         );
       }
     } catch (error) {
+      console.error("[Manual] Connection failed:", error);
       Alert.alert("Error", "Failed to connect to printer");
     }
   };
 
   const handlePrint = async (printer: PrinterInfo) => {
     const printerId = getUniquePrinterId(printer);
+    console.log(`[Print] Starting print job for ${printerId}...`);
+    console.log("[Print] Printer info:", printer);
 
     try {
+      console.log("[Print] Fetching test image...");
       const base64Image = await fetchImageAsBase64(TEST_IMAGE_URL);
+      console.log(`[Print] Image fetched (${base64Image.length} chars), sending to printer...`);
+
       const result = await printImage(base64Image, printer, printerId);
+      console.log(`[Print] printImage returned: ${result}`);
 
       if (!result) {
+        console.error("[Print] Failed to initiate print job");
         Alert.alert("Print Failed", "Failed to initiate print job");
       }
     } catch (error) {
-      console.error("Print failed:", error);
+      console.error("[Print] Error:", error);
       Alert.alert(
         "Print Failed",
         error instanceof Error ? error.message : "Unknown error occurred"
@@ -114,6 +132,8 @@ export default function App() {
           printingStates={printingStates}
           onPrint={handlePrint}
         />
+
+        <LogViewer logs={logs} onClear={clearLogs} maxHeight={180} />
       </View>
     </SafeAreaView>
   );
