@@ -139,6 +139,9 @@ export const usePrinters = (manufacturer: Manufacturer) => {
       try {
         const mod = getPrinterModule(manufacturer);
         const result = await mod.findPrinters(connectionType);
+        if (!result) {
+          setIsSearching(false);
+        }
         return result;
       } catch (error) {
         setIsSearching(false);
