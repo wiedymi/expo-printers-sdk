@@ -179,57 +179,29 @@ export const usePrinters = (manufacturer: Manufacturer) => {
     ): Promise<boolean> => {
       setPrintingStates((prev) => ({ ...prev, [printerId]: true }));
 
-      // JS-side timeout tracker (45s to allow native 30s timeout to fire first)
-      const JS_TIMEOUT_MS = 45000;
-      let timeoutId: NodeJS.Timeout | null = null;
-      const startTime = Date.now();
-
-      const logElapsed = () => {
-        const elapsed = Math.floor((Date.now() - startTime) / 1000);
-        console.log(`[Print] Waiting for onPrintImage event... (${elapsed}s elapsed)`);
-      };
-
-      // Log progress every 5 seconds
-      const progressInterval = setInterval(logElapsed, 5000);
-
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(() => {
-          console.error(`[Print] JS TIMEOUT: No onPrintImage event after ${JS_TIMEOUT_MS / 1000}s`);
-          reject(new Error("Print timeout - no response from native layer"));
-        }, JS_TIMEOUT_MS);
-      });
-
       try {
-        let result: boolean;
         switch (printer.type) {
           case "EPSON":
-            result = await EpsonPrinters.printImage(
+            return await EpsonPrinters.printImage(
               base64Image,
               printer.info as EpsonPrinterInfo
             );
-            break;
           case "RONGTA":
-            result = await RongtaPrinters.printImage(
+            return await RongtaPrinters.printImage(
               base64Image,
               printer.info as RongtaPrinterInfo
             );
-            break;
           case "STAR":
-            result = await StarMicronicsPrinters.printImage(
+            return await StarMicronicsPrinters.printImage(
               base64Image,
               printer.info as StarMicronicsPrinterInfo
             );
-            break;
           default:
             throw new Error("Unknown printer type");
         }
-        return result;
       } catch (error) {
         setPrintingStates((prev) => ({ ...prev, [printerId]: false }));
         throw error;
-      } finally {
-        if (timeoutId) clearTimeout(timeoutId);
-        clearInterval(progressInterval);
       }
     },
     []
