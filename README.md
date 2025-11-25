@@ -137,20 +137,30 @@ const discoverPrinters = async () => {
 If you already know your printer's IP address and port, you can connect directly without discovery:
 
 ```typescript
-// Connect to Rongta printer at known IP
+// Rongta
 const connectToPrinter = async () => {
   try {
-    const printer = await RongtaPrinters.connectManually("192.168.1.100", 9100);
+    const printer = await RongtaPrinters.connectManually("Network", {
+      ipAddress: "192.168.1.100",
+      port: 9100,
+    });
     console.log("Connected to printer:", printer);
-    // Use the printer object for printing
   } catch (error) {
     console.error("Failed to connect:", error);
   }
 };
 
-// Also available for Epson and Star Micronics
-const epsonPrinter = await EpsonPrinters.connectManually("192.168.1.101", 9100);
-const starPrinter = await StarMicronicsPrinters.connectManually("192.168.1.102", 9100);
+// Epson & Star require a model identifier so the SDK can select capabilities
+const epsonPrinter = await EpsonPrinters.connectManually("Network", {
+  ipAddress: "192.168.1.101",
+  port: 9100,
+  modelName: "TM-m30II",
+});
+const starPrinter = await StarMicronicsPrinters.connectManually("Network", {
+  ipAddress: "192.168.1.102",
+  port: 9100,
+  modelName: "mC-Print3",
+});
 ```
 
 **When to use manual connection:**
@@ -158,6 +168,7 @@ const starPrinter = await StarMicronicsPrinters.connectManually("192.168.1.102",
 - The printer is on a different subnet
 - The printer doesn't respond to network discovery
 - You want faster connection without scanning
+- For **Epson** and **Star Micronics**, supply an exact supported model name (e.g. `TM-m30II`, `mC-Print3`) so the SDK can resolve capabilities; call `getSupportedModels()` to list valid values
 
 ### 4. Print images
 

@@ -43,8 +43,14 @@ class RongtaPrintersModule : Module() {
             printerFinder = null
         }
 
-        AsyncFunction("connectManually") { ipAddress: String, port: Int? ->
-            val printerPort = port ?: 9100
+        AsyncFunction("connectManually") { connectionType: String, connectionDetails: Map<String, Any> ->
+            val type = connectionType.toPrinterConnectionType()
+            if (type != PrinterConnectionType.Network) {
+                throw IllegalArgumentException("Manual connection supports Network only for Rongta")
+            }
+
+            val ipAddress = connectionDetails.safeGetString("ipAddress", "IP address")
+            val printerPort = connectionDetails.safeGetIntOrDefault("port", 9100)
 
             when (val validation = NetworkValidator.validateNetworkConnection(ipAddress, printerPort)) {
                 is NetworkValidator.ValidationResult.Error -> {

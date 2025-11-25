@@ -8,7 +8,15 @@ import type { PrinterConnectionType } from "./commons";
 
 declare class EpsonPrintersModule extends NativeModule<EpsonPrintersModuleEvents> {
   findPrinters(connectionType: PrinterConnectionType): Promise<boolean>;
-  connectManually(ipAddress: string, port?: number): Promise<EpsonPrinterInfo>;
+  connectManually(
+    connectionType: PrinterConnectionType,
+    connectionDetails: {
+      ipAddress: string;
+      port?: number;
+      modelName?: string; // required for Epson
+    },
+  ): Promise<EpsonPrinterInfo>;
+  getSupportedModels(): Promise<string[]>;
   printImage(
     base64Image: string,
     deviceData: EpsonPrinterInfo,

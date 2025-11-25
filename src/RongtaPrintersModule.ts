@@ -8,7 +8,10 @@ import type { PrinterConnectionType } from "./commons";
 
 declare class RongtaPrintersModule extends NativeModule<RongtaPrintersModuleEvents> {
   findPrinters(connectionType: PrinterConnectionType): Promise<boolean>;
-  connectManually(ipAddress: string, port?: number): Promise<RongtaPrinterInfo>;
+  connectManually(
+    connectionType: PrinterConnectionType,
+    connectionDetails: { ipAddress: string; port?: number },
+  ): Promise<RongtaPrinterInfo>;
   printImage(
     base64Image: string,
     deviceData: RongtaPrinterInfo,

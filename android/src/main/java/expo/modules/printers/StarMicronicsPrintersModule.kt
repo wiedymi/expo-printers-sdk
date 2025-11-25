@@ -7,12 +7,14 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.printers.commons.NetworkValidator
 import expo.modules.printers.commons.PrinterConnectionType
 import expo.modules.printers.commons.PrinterDeviceData
+import expo.modules.printers.commons.safeGetIntOrDefault
 import expo.modules.printers.commons.safeGetString
 import expo.modules.printers.commons.safeGetStringOrDefault
 import expo.modules.printers.commons.toPrinterConnectionType
 import expo.modules.printers.starmicronics.StarMicronicsPrinter
 import expo.modules.printers.starmicronics.StarMicronicsFinder
 import expo.modules.printers.starmicronics.StarMicronicsPrintResult
+import expo.modules.printers.starmicronics.internals.StarModelCapability
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -42,8 +44,25 @@ class StarMicronicsPrintersModule : Module() {
             printerFinder = null
         }
 
-        AsyncFunction("connectManually") { ipAddress: String, port: Int? ->
-            val printerPort = port ?: 9100
+        AsyncFunction("connectManually") { connectionType: String, connectionDetails: Map<String, Any> ->
+            val type = connectionType.toPrinterConnectionType()
+            if (type != PrinterConnectionType.Network) {
+                throw IllegalArgumentException("Manual connection supports Network only for Star Micronics")
+            }
+
+            val ipAddress = connectionDetails.safeGetString("ipAddress", "IP address")
+            val printerPort = connectionDetails.safeGetIntOrDefault("port", 9100)
+            val modelName = connectionDetails.safeGetString("modelName", "modelName")
+
+            var modelIndex = StarModelCapability.getModelIdx(modelName)
+            if (modelIndex == StarModelCapability.NONE) {
+                modelIndex = StarModelCapability.getModelIdxByTitle(modelName)
+            }
+
+            if (modelIndex == StarModelCapability.NONE) {
+                val supported = StarModelCapability.getSupportedModels().joinToString()
+                throw IllegalArgumentException("Unsupported Star printer model: $modelName. Supported models: $supported")
+            }
 
             when (val validation = NetworkValidator.validateNetworkConnection(ipAddress, printerPort)) {
                 is NetworkValidator.ValidationResult.Error -> {
@@ -54,11 +73,13 @@ class StarMicronicsPrintersModule : Module() {
                     // Star SDK uses TCP:IP:PORT format for network printers
                     val portName = "TCP:$ipAddress:$printerPort"
                     mapOf(
-                        "deviceName" to "Manual Connection",
+                        "deviceName" to modelName,
                         "portName" to portName,
                         "macAddress" to "",
                         "usbSerialNumber" to "",
-                        "connectionType" to "Network"
+                        "connectionType" to PrinterConnectionType.Network.name,
+                        "isSupported" to true,
+                        "unsupportedReason" to ""
                     )
                 }
             }
@@ -91,6 +112,10 @@ class StarMicronicsPrintersModule : Module() {
             }.onFailure { e ->
                 Log.e(TAG, "Failed to find printers", e)
             }.getOrElse { false }
+        }
+
+        AsyncFunction("getSupportedModels") {
+            StarModelCapability.getSupportedModels()
         }
 
         AsyncFunction("printImage") { base64Image: String, deviceData: Map<String, Any> ->

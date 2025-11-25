@@ -33,10 +33,12 @@ export default function App() {
   const {
     printers,
     isSearching,
+    supportedModels,
     printingStates,
     searchPrinters,
     connectManually,
     printImage,
+    refreshSupportedModels,
   } = usePrinters(selectedManufacturer);
 
   const handleSearch = async () => {
@@ -51,11 +53,18 @@ export default function App() {
     }
   };
 
-  const handleManualConnect = async (ipAddress: string, port: number) => {
+  const handleManualConnect = async (
+    ipAddress: string,
+    modelName: string,
+    port: number
+  ) => {
     try {
-      const printerInfo = await connectManually(ipAddress, port);
+      const printerInfo = await connectManually(ipAddress, modelName, port);
       if (printerInfo) {
-        Alert.alert("Connected", `${selectedManufacturer} @ ${ipAddress}:${port}`);
+        Alert.alert(
+          "Connected",
+          `${selectedManufacturer} ${modelName} @ ${ipAddress}:${port}`
+        );
       }
     } catch (error) {
       Alert.alert("Error", "Failed to connect to printer");
@@ -91,9 +100,11 @@ export default function App() {
           manufacturer={selectedManufacturer}
           isSearching={isSearching}
           isRequestingPermissions={isRequestingPermissions}
+          supportedModels={supportedModels}
           onConnectionTypeChange={setSelectedConnectionType}
           onManufacturerChange={setSelectedManufacturer}
           onSearch={handleSearch}
+          onRefreshModels={refreshSupportedModels}
           onManualConnect={handleManualConnect}
         />
 

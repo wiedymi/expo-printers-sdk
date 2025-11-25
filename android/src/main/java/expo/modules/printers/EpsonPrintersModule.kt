@@ -8,12 +8,14 @@ import expo.modules.printers.commons.NetworkValidator
 import expo.modules.printers.commons.PrinterConnectionType
 import expo.modules.printers.commons.PrinterDeviceData
 import expo.modules.printers.commons.safeGetInt
+import expo.modules.printers.commons.safeGetIntOrDefault
 import expo.modules.printers.commons.safeGetString
 import expo.modules.printers.commons.safeGetStringOrDefault
 import expo.modules.printers.commons.toPrinterConnectionType
 import expo.modules.printers.epson.EpsonPrinter
 import expo.modules.printers.epson.EpsonPrinterFinder
 import expo.modules.printers.epson.EpsonPrintResult
+import expo.modules.printers.epson.internals.EpsonModelCapability
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -43,8 +45,20 @@ class EpsonPrintersModule : Module() {
             printerFinder = null
         }
 
-        AsyncFunction("connectManually") { ipAddress: String, port: Int? ->
-            val printerPort = port ?: 9100
+        AsyncFunction("connectManually") { connectionType: String, connectionDetails: Map<String, Any> ->
+            val type = connectionType.toPrinterConnectionType()
+            if (type != PrinterConnectionType.Network) {
+                throw IllegalArgumentException("Manual connection supports Network only for Epson")
+            }
+
+            val ipAddress = connectionDetails.safeGetString("ipAddress", "IP address")
+            val printerPort = connectionDetails.safeGetIntOrDefault("port", 9100)
+            val modelName = connectionDetails.safeGetString("modelName", "modelName")
+
+            if (EpsonModelCapability.printerSeriesByName(modelName) == EpsonModelCapability.UNKNOWN) {
+                val supported = EpsonModelCapability.getSupportedModels().joinToString()
+                throw IllegalArgumentException("Unsupported Epson model: $modelName. Supported models: $supported")
+            }
 
             when (val validation = NetworkValidator.validateNetworkConnection(ipAddress, printerPort)) {
                 is NetworkValidator.ValidationResult.Error -> {
@@ -55,13 +69,15 @@ class EpsonPrintersModule : Module() {
                     // Epson SDK can target non-default ports using TCP:IP:PORT
                     val target = "TCP:$ipAddress:$printerPort"
                     mapOf(
-                        "deviceName" to "Manual Connection",
+                        "deviceName" to modelName,
                         "target" to target,
                         "ipAddress" to ipAddress,
                         "macAddress" to "",
                         "bdAddress" to "",
-                        "connectionType" to "Network",
-                        "deviceType" to 0
+                        "connectionType" to PrinterConnectionType.Network.name,
+                        "deviceType" to 0,
+                        "isSupported" to true,
+                        "unsupportedReason" to ""
                     )
                 }
             }
@@ -96,6 +112,10 @@ class EpsonPrintersModule : Module() {
             }.onFailure { e ->
                 Log.e(TAG, "Failed to find printers", e)
             }.getOrElse { false }
+        }
+
+        AsyncFunction("getSupportedModels") {
+            EpsonModelCapability.getSupportedModels()
         }
 
         AsyncFunction("printImage") { base64Image: String, deviceData: Map<String, Any> ->

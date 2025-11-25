@@ -24,6 +24,12 @@ type PrinterModule =
 export const usePrinters = (manufacturer: Manufacturer) => {
   const [printers, setPrinters] = useState<PrinterInfo[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [supportedModels, setSupportedModels] = useState<string[]>([]);
+  const modelsCacheRef = useState<Record<Manufacturer, string[]>>({
+    EPSON: [],
+    STAR: [],
+    RONGTA: [],
+  })[0];
   const [printingStates, setPrintingStates] = useState<{
     [key: string]: boolean;
   }>({});
@@ -69,6 +75,38 @@ export const usePrinters = (manufacturer: Manufacturer) => {
     }
   };
 
+  const refreshSupportedModels = useCallback(
+    async (forceRefresh = false): Promise<void> => {
+      try {
+        const cached = modelsCacheRef[manufacturer];
+        if (!forceRefresh && cached.length > 0) {
+          setSupportedModels(cached);
+          return;
+        }
+
+        const mod = getPrinterModule(manufacturer) as any;
+        if (typeof mod.getSupportedModels === "function") {
+          const models: string[] = (await mod.getSupportedModels()) ?? [];
+          modelsCacheRef[manufacturer] = models;
+          setSupportedModels(models);
+          return;
+        } else {
+          setSupportedModels([]);
+          return;
+        }
+      } catch (error) {
+        console.warn("Failed to load supported models", error);
+        setSupportedModels([]);
+        return;
+      }
+    },
+    [manufacturer, modelsCacheRef]
+  );
+
+  useEffect(() => {
+    refreshSupportedModels();
+  }, [refreshSupportedModels]);
+
   useEffect(() => {
     let foundListener: { remove: () => void } | null = null;
     let printListener: { remove: () => void } | null = null;
@@ -102,9 +140,13 @@ export const usePrinters = (manufacturer: Manufacturer) => {
   );
 
   const connectManually = useCallback(
-    async (ipAddress: string, port: number) => {
+    async (ipAddress: string, modelName: string, port: number) => {
       const mod = getPrinterModule(manufacturer);
-      const printerInfo = await mod.connectManually(ipAddress, port);
+      const printerInfo = await mod.connectManually("Network", {
+        ipAddress,
+        port,
+        modelName,
+      });
 
       if (printerInfo) {
         setPrinters((prev) =>
@@ -164,9 +206,11 @@ export const usePrinters = (manufacturer: Manufacturer) => {
   return {
     printers,
     isSearching,
+    supportedModels,
     printingStates,
     searchPrinters,
     connectManually,
     printImage,
+    refreshSupportedModels,
   };
 };
