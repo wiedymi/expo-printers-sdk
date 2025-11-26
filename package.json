@@ -33,14 +33,14 @@
   "homepage": "https://github.com/wiedymi/expo-printers-sdk#readme",
   "dependencies": {},
   "devDependencies": {
-    "@types/react": "~18.3.12",
-    "expo-module-scripts": "^4.0.3",
-    "expo": "~52.0.0",
+    "@types/react": "~18.3.27",
+    "expo-module-scripts": "^4.1.10",
+    "expo": "~52.0.47",
     "react-native": "0.76.0"
   },
   "peerDependencies": {
     "expo": "*",
-    "react": "*",
+    "react": "^19.1.0",
     "react-native": "*"
   }
 }
