@@ -16,7 +16,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.runBlocking
 import kotlin.time.Duration.Companion.seconds
 
 class RongtaBluetoothScanner(
@@ -62,7 +61,7 @@ class RongtaBluetoothScanner(
                         if (deviceType != BluetoothClass.Device.Major.IMAGING) return
 
                         Log.i(TAG, "found device - $device")
-                        runBlocking { send(device) }
+                        trySend(device)
                     } else if (BluetoothAdapter.ACTION_DISCOVERY_FINISHED == action) {
                         Log.i(TAG, "discovery finished")
                         if (this@callbackFlow.isActive) close()
