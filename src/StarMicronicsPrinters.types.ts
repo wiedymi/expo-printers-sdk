@@ -10,8 +10,28 @@ export type StarMicronicsPrinterInfo = {
   unsupportedReason?: string;
 };
 
+export type StarMicronicsPrintErrorCode =
+  | "INVALID_IMAGE"
+  | "UNSUPPORTED_MODEL"
+  | "PORT_OPEN_FAILED"
+  | "PRINTER_IN_USE"
+  | "CONNECTION_TIMEOUT"
+  | "COMMUNICATION_ERROR"
+  | "PRINTER_OFFLINE"
+  | "COVER_OPEN"
+  | "PAPER_EMPTY"
+  | "PAPER_JAM"
+  | "CUTTER_ERROR"
+  | "HEAD_THERMISTOR_ERROR"
+  | "VOLTAGE_ERROR"
+  | "OVER_TEMPERATURE"
+  | "RECEIVE_BUFFER_OVERFLOW"
+  | "HARDWARE_ERROR"
+  | "NOT_INITIALIZED";
+
 export type StarMicronicsPrintResult = {
   success: boolean;
+  errorCode?: StarMicronicsPrintErrorCode;
   error?: string;
 };
 

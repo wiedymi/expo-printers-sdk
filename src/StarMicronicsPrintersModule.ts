@@ -13,17 +13,16 @@ declare class StarMicronicsPrintersModule extends NativeModule<StarMicronicsPrin
     connectionDetails: {
       ipAddress: string;
       port?: number;
-      modelName?: string; // required for Star Micronics
-    },
+      modelName: string;
+    }
   ): Promise<StarMicronicsPrinterInfo>;
   getSupportedModels(): Promise<string[]>;
   printImage(
     base64Image: string,
-    deviceData: StarMicronicsPrinterInfo,
+    deviceData: StarMicronicsPrinterInfo
   ): Promise<boolean>;
 }
 
-// This call loads the native module object from the JSI.
 export default requireNativeModule<StarMicronicsPrintersModule>(
-  "StarMicronicsPrintersModule",
+  "StarMicronicsPrintersModule"
 );

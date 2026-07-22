@@ -18,7 +18,6 @@ import expo.modules.printers.starmicronics.internals.StarModelCapability
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class StarMicronicsPrintersModule : Module() {
     private val TAG = "StarMicronicsPrintersModule"
@@ -51,12 +50,15 @@ class StarMicronicsPrintersModule : Module() {
             }
 
             val ipAddress = connectionDetails.safeGetString("ipAddress", "IP address")
-            val printerPort = connectionDetails.safeGetIntOrDefault("port", 9100)
+            val printerPort = connectionDetails.safeGetIntOrDefault("port", STAR_NETWORK_PORT)
             val modelName = connectionDetails.safeGetString("modelName", "modelName")
 
-            var modelIndex = StarModelCapability.getModelIdx(modelName)
-            if (modelIndex == StarModelCapability.NONE) {
-                modelIndex = StarModelCapability.getModelIdxByTitle(modelName)
+            val modelIndex = StarModelCapability.getModelIdx(modelName)
+                .takeIf { it != StarModelCapability.NONE }
+                ?: StarModelCapability.getModelIdxByTitle(modelName)
+
+            if (printerPort != STAR_NETWORK_PORT) {
+                throw IllegalArgumentException("Star network printers use port $STAR_NETWORK_PORT")
             }
 
             if (modelIndex == StarModelCapability.NONE) {
@@ -70,8 +72,7 @@ class StarMicronicsPrintersModule : Module() {
                     throw IllegalArgumentException(validation.message)
                 }
                 NetworkValidator.ValidationResult.Valid -> {
-                    // Star SDK uses TCP:IP:PORT format for network printers
-                    val portName = "TCP:$ipAddress:$printerPort"
+                    val portName = "TCP:$ipAddress"
                     mapOf(
                         "deviceName" to modelName,
                         "portName" to portName,
@@ -124,7 +125,6 @@ class StarMicronicsPrintersModule : Module() {
             }
 
             runCatching {
-                // Safe data extraction with utility functions
                 val connectionType = deviceData.safeGetString("connectionType").toPrinterConnectionType()
 
                 val starDeviceData = PrinterDeviceData.Star(
@@ -138,20 +138,11 @@ class StarMicronicsPrintersModule : Module() {
                 coroutineScope.launch(Dispatchers.IO) {
                     val result = printer?.printImage(base64Image, starDeviceData)
                     val success = result == StarMicronicsPrintResult.Success
-                    
+
                     sendEvent("onPrintImage", mapOf(
                         "success" to success,
-                        "error" to when (result) {
-                            StarMicronicsPrintResult.ErrorInvalidImage -> "Invalid image data"
-                            StarMicronicsPrintResult.ErrorOpenPort -> "Failed to open printer port"
-                            StarMicronicsPrintResult.ErrorPrinterOffline -> "Printer is offline"
-                            StarMicronicsPrintResult.ErrorCoverOpened -> "Printer cover is open"
-                            StarMicronicsPrintResult.ErrorPaperEmpty -> "Printer is out of paper"
-                            StarMicronicsPrintResult.ErrorPaperJam -> "Paper jam"
-                            StarMicronicsPrintResult.ErrorUnknown -> "Unknown error. Check logs for printer model identification details."
-                            StarMicronicsPrintResult.Success -> null
-                            null -> "Printer not initialized"
-                        }
+                        "errorCode" to if (success) null else result?.code ?: "NOT_INITIALIZED",
+                        "error" to if (success) null else result?.message ?: "Printer not initialized",
                     ))
                 }
                 true
@@ -159,9 +150,14 @@ class StarMicronicsPrintersModule : Module() {
                 Log.e(TAG, "Print failed", e)
                 sendEvent("onPrintImage", mapOf(
                     "success" to false,
+                    "errorCode" to "COMMUNICATION_ERROR",
                     "error" to (e.localizedMessage ?: "Unknown error during printing")
                 ))
             }.getOrElse { false }
         }
+    }
+
+    companion object {
+        private const val STAR_NETWORK_PORT = 9100
     }
 } 

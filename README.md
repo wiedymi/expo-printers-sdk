@@ -361,7 +361,7 @@ RongtaPrinters.printImage(base64Image: string, deviceData: RongtaPrinterInfo): P
 ```typescript
 type StarMicronicsPrinterInfo = {
   deviceName: string; // e.g., "TSP100"
-  portName: string; // Port identifier (TCP:IP:PORT or BT:MAC)
+  portName: string; // Port identifier (TCP:IP or BT:MAC)
   macAddress: string; // MAC address
   usbSerialNumber: string; // USB serial (if applicable)
   connectionType: PrinterConnectionType;
@@ -369,6 +369,7 @@ type StarMicronicsPrinterInfo = {
 
 type StarMicronicsPrintResult = {
   success: boolean;
+  errorCode?: StarMicronicsPrintErrorCode;
   error?: string;
 };
 ```
@@ -382,7 +383,7 @@ StarMicronicsPrinters.findPrinters(connectionType: PrinterConnectionType): Promi
 // Connect manually to a network printer
 StarMicronicsPrinters.connectManually(
   connectionType: PrinterConnectionType,
-  connectionDetails: { ipAddress: string; port?: number; modelName?: string }
+  connectionDetails: { ipAddress: string; port?: number; modelName: string }
 ): Promise<StarMicronicsPrinterInfo>
 
 // Get list of supported printer models
@@ -465,7 +466,15 @@ Rongta network discovery requires:
 
 ## Recent Updates
 
-### v0.9.5 (Latest)
+### v0.9.8 (Latest)
+
+- **Star Printer Reliability**
+  - Fixed network connection and print-completion timeouts
+  - Fixed manual Star network port names
+  - Added stable `errorCode` values for connection, status, and hardware failures
+  - Ensured printer ports are released after failed print attempts
+
+### v0.9.5
 
 - **Manual Network Connection** - Connect directly to printers by IP/port
   - `connectManually(ipAddress, port)` method for all printer types

@@ -5,18 +5,18 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
 import android.util.Log
+import com.starmicronics.stario.StarIOPort
+import com.starmicronics.stario.StarIOPortException
+import com.starmicronics.stario.StarPrinterStatus
+import com.starmicronics.stario.StarResultCode
+import com.starmicronics.starioextension.ICommandBuilder
+import com.starmicronics.starioextension.ICommandBuilder.CutPaperAction
+import com.starmicronics.starioextension.StarIoExt
 import expo.modules.printers.commons.Printer
 import expo.modules.printers.commons.PrinterConnectionType
 import expo.modules.printers.commons.PrinterDeviceData
 import expo.modules.printers.starmicronics.internals.StarModelCapability
-import com.starmicronics.stario.StarIOPort
-import com.starmicronics.stario.StarPrinterStatus
-import com.starmicronics.starioextension.ICommandBuilder
-import com.starmicronics.starioextension.ICommandBuilder.CutPaperAction
-import com.starmicronics.starioextension.StarIoExt
-import kotlinx.coroutines.coroutineScope
 import java.io.ByteArrayInputStream
-import kotlin.time.Duration.Companion.seconds
 
 class StarMicronicsPrinter(
     private val appContext: Context,
@@ -25,43 +25,36 @@ class StarMicronicsPrinter(
     override suspend fun printImage(
         base64Image: String,
         deviceData: PrinterDeviceData.Star
-    ): StarMicronicsPrintResult = coroutineScope {
-        // Try to identify printer using model name
-        Log.d(TAG, "Attempting to identify printer - modelName: '${deviceData.modelName}', portName: '${deviceData.portName}', macAddress: '${deviceData.macAddress}'")
+    ): StarMicronicsPrintResult {
+        Log.d(
+            TAG,
+            "Identifying printer modelName='${deviceData.modelName}', portName='${deviceData.portName}'",
+        )
 
-        var modelIndex = StarModelCapability.getModelIdx(deviceData.modelName)
-        Log.d(TAG, "getModelIdx result: $modelIndex")
-
-        // It could have happen for some BT printers when they don't provide model name
-        if (modelIndex == StarModelCapability.NONE) {
-            // So user can specify model manually
-            modelIndex = StarModelCapability.getModelIdxByTitle(deviceData.modelName)
-            Log.d(TAG, "getModelIdxByTitle result: $modelIndex")
-        }
+        val modelIndex = StarModelCapability.getModelIdx(deviceData.modelName)
+            .takeIf { it != StarModelCapability.NONE }
+            ?: StarModelCapability.getModelIdxByTitle(deviceData.modelName)
 
         if (modelIndex == StarModelCapability.NONE) {
-            Log.e(TAG, "Failed to identify printer model from modelName: '${deviceData.modelName}'. Supported models: ${StarModelCapability.getSupportedModels()}")
-            return@coroutineScope StarMicronicsPrintResult.ErrorUnknown
+            Log.e(
+                TAG,
+                "Unsupported printer modelName='${deviceData.modelName}', supportedModels=${StarModelCapability.getSupportedModels()}",
+            )
+            return StarMicronicsPrintResult.UnsupportedModel
         }
 
-        val portSettings = StarModelCapability.getPortSettings(modelIndex)
-        val paperSize = StarModelCapability.getPaperSize(modelIndex)
-        // --- Bluetooth ---
-        // It can communicate with device name(Ex.BT:Star Micronics) using bluetooth.
-        // If used Mac Address(Ex. BT:00:12:3f:XX:XX:XX) at Bluetooth, can choose destination target.
         val portName = if (deviceData.connectionType == PrinterConnectionType.Bluetooth) {
-            "BT:" + deviceData.macAddress
+            "BT:${deviceData.macAddress}"
         } else {
             deviceData.portName
         }
-        val emulation = StarModelCapability.getEmulation(modelIndex)
 
-        return@coroutineScope print(
+        return print(
             base64Image = base64Image,
-            emulation = emulation,
+            emulation = StarModelCapability.getEmulation(modelIndex),
             portName = portName,
-            portSettings = portSettings,
-            paperSize = paperSize,
+            portSettings = StarModelCapability.getPortSettings(modelIndex),
+            paperSize = StarModelCapability.getPaperSize(modelIndex),
         )
     }
 
@@ -73,98 +66,114 @@ class StarMicronicsPrinter(
         paperSize: Int,
     ): StarMicronicsPrintResult {
         val builder = StarIoExt.createCommandBuilder(emulation)
-
         builder.beginDocument()
 
-        val img: Bitmap = runCatching {
-            val decodedString = Base64.decode(base64Image, Base64.DEFAULT)
-            val inputStream = ByteArrayInputStream(decodedString)
-            val decodedBitmap = BitmapFactory.decodeStream(inputStream)
-
-            val ratio = paperSize.toFloat() / decodedBitmap.width
-            val targetHeight = (decodedBitmap.height * ratio).toInt()
-            Bitmap.createScaledBitmap(decodedBitmap, paperSize, targetHeight, true)
-        }.getOrNull() ?: return StarMicronicsPrintResult.ErrorInvalidImage
+        val image = decodeAndScaleImage(base64Image, paperSize)
+            ?: return StarMicronicsPrintResult.InvalidImage
 
         builder.appendBitmap(
-            img,
-            false,      // diffusion (true = dithering, better for photos)
-            paperSize,  // width in printer dots
-            true,       // bothScale = preserve aspect ratio
-            ICommandBuilder.BitmapConverterRotation.Normal
+            image,
+            false,
+            paperSize,
+            true,
+            ICommandBuilder.BitmapConverterRotation.Normal,
         )
-
         builder.appendCutPaper(CutPaperAction.PartialCutWithFeed)
-
         builder.endDocument()
 
-        var result: StarMicronicsPrintResult = StarMicronicsPrintResult.ErrorOpenPort
-        runCatching {
-            val port = StarIOPort.getPort(
+        val port = try {
+            StarIOPort.getPort(
                 portName,
                 portSettings,
-                connectionTimeout.inWholeSeconds.toInt(),
-                appContext
+                CONNECTION_TIMEOUT_MILLISECONDS,
+                appContext,
             )
+        } catch (throwable: Exception) {
+            logPrinterError("open port", throwable, portName)
+            return mapPortException(throwable, StarMicronicsPrintResult.PortOpenFailed)
+        }
 
-            var status: StarPrinterStatus = port.beginCheckedBlock()
-            if (status.offline) {
-                result = StarMicronicsPrintResult.ErrorPrinterOffline
+        return try {
+            val initialResult = mapPrinterStatus(port.beginCheckedBlock())
+            if (initialResult != StarMicronicsPrintResult.Success) {
+                initialResult
             } else {
                 val receiptData = builder.commands
                 port.writePort(receiptData, 0, receiptData.size)
-                port.setEndCheckedBlockTimeoutMillis(endCheckedBlockTimeout.inWholeSeconds.toInt())
-
-                status = port.endCheckedBlock()
-                when {
-                    status.coverOpen -> {
-                        result = StarMicronicsPrintResult.ErrorCoverOpened
-                    }
-
-                    status.receiptPaperEmpty -> {
-                        result = StarMicronicsPrintResult.ErrorPaperEmpty
-                    }
-
-                    status.jamError -> {
-                        result = StarMicronicsPrintResult.ErrorPaperJam
-                    }
-
-                    status.offline -> {
-                        result = StarMicronicsPrintResult.ErrorPrinterOffline
-                    }
-
-                    status.unrecoverableError -> {
-                        result = StarMicronicsPrintResult.ErrorUnknown
-                    }
-
-                    else -> {
-                        result = StarMicronicsPrintResult.Success
-                    }
-                }
+                port.setEndCheckedBlockTimeoutMillis(END_CHECKED_BLOCK_TIMEOUT_MILLISECONDS)
+                mapPrinterStatus(port.endCheckedBlock())
             }
-
-            port
-        }.onFailure { throwable ->
-            result = if (throwable.message == PRINTER_IS_POWER_OFF) {
-                StarMicronicsPrintResult.ErrorPrinterOffline
-            } else {
-                StarMicronicsPrintResult.ErrorUnknown
-            }
-        }.onSuccess { port ->
-            runCatching {
+        } catch (throwable: Exception) {
+            logPrinterError("print", throwable, portName)
+            mapPortException(throwable, StarMicronicsPrintResult.CommunicationError)
+        } finally {
+            try {
                 StarIOPort.releasePort(port)
-            }.onFailure { throwable ->
-                Log.e("StarMicronicsPrinter", "failed to release printer port, error - $throwable")
+            } catch (throwable: Exception) {
+                logPrinterError("release port", throwable, portName)
             }
         }
+    }
 
-        return result
+    private fun decodeAndScaleImage(base64Image: String, paperSize: Int): Bitmap? = runCatching {
+        val decodedBytes = Base64.decode(base64Image, Base64.DEFAULT)
+        val decodedBitmap = BitmapFactory.decodeStream(ByteArrayInputStream(decodedBytes))
+            ?: return@runCatching null
+        if (decodedBitmap.width <= 0 || decodedBitmap.height <= 0) {
+            return@runCatching null
+        }
+
+        val scaledHeight = (decodedBitmap.height.toLong() * paperSize / decodedBitmap.width)
+            .coerceIn(1, Int.MAX_VALUE.toLong())
+            .toInt()
+        Bitmap.createScaledBitmap(decodedBitmap, paperSize, scaledHeight, true)
+    }.getOrNull()
+
+    private fun mapPrinterStatus(status: StarPrinterStatus): StarMicronicsPrintResult = when {
+        status.coverOpen -> StarMicronicsPrintResult.CoverOpen
+        status.receiptPaperEmpty -> StarMicronicsPrintResult.PaperEmpty
+        status.jamError -> StarMicronicsPrintResult.PaperJam
+        status.cutterError -> StarMicronicsPrintResult.CutterError
+        status.headThermistorError -> StarMicronicsPrintResult.HeadThermistorError
+        status.voltageError -> StarMicronicsPrintResult.VoltageError
+        status.overTemp -> StarMicronicsPrintResult.OverTemperature
+        status.receiveBufferOverflow -> StarMicronicsPrintResult.ReceiveBufferOverflow
+        status.unrecoverableError -> StarMicronicsPrintResult.HardwareError
+        status.offline -> StarMicronicsPrintResult.PrinterOffline
+        else -> StarMicronicsPrintResult.Success
+    }
+
+    private fun mapPortException(
+        throwable: Throwable,
+        fallback: StarMicronicsPrintResult,
+    ): StarMicronicsPrintResult {
+        if (throwable is StarIOPortException && throwable.errorCode == StarResultCode.FAILURE_IN_USE) {
+            return StarMicronicsPrintResult.PrinterInUse
+        }
+
+        val message = throwable.message.orEmpty()
+        return when {
+            message.equals(PRINTER_IS_POWER_OFF, ignoreCase = true) -> StarMicronicsPrintResult.PrinterOffline
+            message.contains("timed out", ignoreCase = true) -> StarMicronicsPrintResult.ConnectionTimeout
+            message.contains("timeout", ignoreCase = true) -> StarMicronicsPrintResult.ConnectionTimeout
+            message.contains("no response", ignoreCase = true) -> StarMicronicsPrintResult.ConnectionTimeout
+            else -> fallback
+        }
+    }
+
+    private fun logPrinterError(operation: String, throwable: Throwable, portName: String) {
+        val errorCode = (throwable as? StarIOPortException)?.errorCode
+        Log.e(
+            TAG,
+            "Failed to $operation on $portName: type=${throwable::class.java.simpleName}, code=$errorCode, message=${throwable.message}",
+            throwable,
+        )
     }
 
     companion object {
         private const val TAG = "StarMicronicsPrinter"
-        const val PRINTER_IS_POWER_OFF = "Printer is power off."
-        private val connectionTimeout = 10.seconds
-        private val endCheckedBlockTimeout = 30.seconds
+        private const val PRINTER_IS_POWER_OFF = "Printer is power off."
+        private const val CONNECTION_TIMEOUT_MILLISECONDS = 10_000
+        private const val END_CHECKED_BLOCK_TIMEOUT_MILLISECONDS = 30_000
     }
 }
