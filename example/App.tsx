@@ -7,7 +7,7 @@ import {
   StyleSheet,
   Platform,
 } from "react-native";
-import type { PrinterConnectionType } from "expo-printers-sdk";
+import type { PaperWidth, PrinterConnectionType } from "expo-printers-sdk";
 import type { Manufacturer, PrinterInfo } from "./types/printer";
 import { usePrinters } from "./hooks/usePrinters";
 import { usePermissions } from "./hooks/usePermissions";
@@ -16,8 +16,17 @@ import { fetchImageAsBase64, getUniquePrinterId } from "./utils/printer-utils";
 import CompactPrinterSelector from "./components/compact-printer-selector";
 import PrinterList from "./components/printer-list";
 import LogViewer from "./components/log-viewer";
+import ButtonRow from "./components/button-row";
 
 const TEST_IMAGE_URL = "https://placehold.co/600x400/000000/FFFFFF.png";
+
+type PaperWidthOption = "AUTO" | "58" | "80";
+
+const PAPER_WIDTH_LABELS: Record<PaperWidthOption, string> = {
+  AUTO: "Paper: auto",
+  "58": "58 mm",
+  "80": "80 mm",
+};
 
 const MONO_FONT = Platform.select({
   ios: "Menlo",
@@ -30,6 +39,9 @@ export default function App() {
     useState<PrinterConnectionType>("Network");
   const [selectedManufacturer, setSelectedManufacturer] =
     useState<Manufacturer>("RONGTA");
+
+  const [paperWidthOption, setPaperWidthOption] =
+    useState<PaperWidthOption>("AUTO");
 
   const { logs, clearLogs } = useLogs();
   const { isRequestingPermissions, requestPermissions } = usePermissions();
@@ -99,7 +111,16 @@ export default function App() {
         `[Print] Image fetched (${base64Image.length} chars), sending to printer...`,
       );
 
-      const result = await printImage(base64Image, printer, printerId);
+      const paperWidth: PaperWidth | undefined =
+        paperWidthOption === "AUTO"
+          ? undefined
+          : (Number(paperWidthOption) as PaperWidth);
+      const result = await printImage(
+        base64Image,
+        printer,
+        printerId,
+        paperWidth,
+      );
       console.log(`[Print] printImage returned: ${result}`);
 
       if (!result) {
@@ -149,6 +170,13 @@ export default function App() {
           onSearch={handleSearch}
           onRefreshModels={refreshSupportedModels}
           onManualConnect={handleManualConnect}
+        />
+
+        <ButtonRow
+          options={["AUTO", "58", "80"]}
+          selected={paperWidthOption}
+          onSelect={setPaperWidthOption}
+          labelMap={PAPER_WIDTH_LABELS}
         />
 
         <PrinterList

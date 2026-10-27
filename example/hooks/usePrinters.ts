@@ -11,6 +11,7 @@ import type {
   EpsonPrintResult,
   RongtaPrintResult,
   StarMicronicsPrintResult,
+  PaperWidth,
   PrinterConnectionType,
   PrinterStatus,
 } from "expo-printers-sdk";
@@ -184,10 +185,13 @@ export const usePrinters = (manufacturer: Manufacturer) => {
       base64Image: string,
       printer: PrinterInfo,
       printerId: string,
+      paperWidth?: PaperWidth,
     ): Promise<boolean> => {
       setPrintingStates((prev) => ({ ...prev, [printerId]: true }));
-      const options = { jobId: `test-${Date.now()}` };
-      console.log(`[Print] jobId: ${options.jobId}`);
+      const options = { jobId: `test-${Date.now()}`, paperWidth };
+      console.log(
+        `[Print] jobId: ${options.jobId}, paperWidth: ${paperWidth ?? "auto"}`,
+      );
 
       try {
         switch (printer.type) {
