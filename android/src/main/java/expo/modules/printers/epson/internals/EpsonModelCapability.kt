@@ -1,6 +1,7 @@
 package expo.modules.printers.epson.internals
 
 import com.epson.epos2.printer.Printer
+import expo.modules.printers.commons.PaperWidth
 
 object EpsonModelCapability {
 
@@ -194,9 +195,15 @@ object EpsonModelCapability {
     fun supportsPaperWidthQuery(providedPrinterName: String): Boolean =
         modelNameFor(providedPrinterName) in paperWidthQueryModels
 
-    // paperWidth is a Printer.SETTING_PAPERWIDTH_* value, or null if the printer did not report it.
-    fun printableWidth(printerSeries: Int, paperWidth: Int?): Int {
+    fun paperWidthSetting(paperWidth: PaperWidth): Int = when (paperWidth) {
+        PaperWidth.MM58 -> Printer.SETTING_PAPERWIDTH_58_0
+        PaperWidth.MM80 -> Printer.SETTING_PAPERWIDTH_80_0
+    }
+
+    // paperWidthSetting is a Printer.SETTING_PAPERWIDTH_* value, or null if it is not known. A paper width that the
+    // series does not support gives the standard width.
+    fun printableWidth(printerSeries: Int, paperWidthSetting: Int?): Int {
         val printableWidth = printableWidthBySeries[printerSeries] ?: return FALLBACK_PRINTABLE_WIDTH
-        return paperWidth?.let(printableWidth.dotsByPaperWidth::get) ?: printableWidth.standardDots
+        return paperWidthSetting?.let(printableWidth.dotsByPaperWidth::get) ?: printableWidth.standardDots
     }
 }

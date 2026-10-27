@@ -5,6 +5,7 @@ import android.util.Log
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.printers.commons.NetworkValidator
+import expo.modules.printers.commons.PrintOptions
 import expo.modules.printers.commons.PrinterConnectionType
 import expo.modules.printers.commons.PrinterDeviceData
 import expo.modules.printers.commons.safeGetIntOrDefault
@@ -119,7 +120,7 @@ class StarMicronicsPrintersModule : Module() {
             StarModelCapability.getSupportedModels()
         }
 
-        AsyncFunction("printImage") { base64Image: String, deviceData: Map<String, Any> ->
+        AsyncFunction("printImage") { base64Image: String, deviceData: Map<String, Any>, options: PrintOptions? ->
             if (printer == null) {
                 return@AsyncFunction false
             }
@@ -136,7 +137,7 @@ class StarMicronicsPrintersModule : Module() {
                 )
 
                 coroutineScope.launch(Dispatchers.IO) {
-                    val result = printer?.printImage(base64Image, starDeviceData)
+                    val result = printer?.printImage(base64Image, starDeviceData, options?.paperWidth)
                     val success = result == StarMicronicsPrintResult.Success
 
                     sendEvent("onPrintImage", mapOf(

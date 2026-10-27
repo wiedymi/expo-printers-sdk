@@ -4,7 +4,7 @@ import type {
   StarMicronicsPrintersModuleEvents,
   StarMicronicsPrinterInfo,
 } from "./StarMicronicsPrinters.types";
-import type { PrinterConnectionType } from "./commons";
+import type { PrinterConnectionType, PrintOptions } from "./commons";
 
 declare class StarMicronicsPrintersModule extends NativeModule<StarMicronicsPrintersModuleEvents> {
   findPrinters(connectionType: PrinterConnectionType): Promise<boolean>;
@@ -20,6 +20,7 @@ declare class StarMicronicsPrintersModule extends NativeModule<StarMicronicsPrin
   printImage(
     base64Image: string,
     deviceData: StarMicronicsPrinterInfo,
+    options?: PrintOptions,
   ): Promise<boolean>;
 }
 

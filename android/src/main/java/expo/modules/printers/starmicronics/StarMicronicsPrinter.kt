@@ -12,6 +12,7 @@ import com.starmicronics.stario.StarResultCode
 import com.starmicronics.starioextension.ICommandBuilder
 import com.starmicronics.starioextension.ICommandBuilder.CutPaperAction
 import com.starmicronics.starioextension.StarIoExt
+import expo.modules.printers.commons.PaperWidth
 import expo.modules.printers.commons.Printer
 import expo.modules.printers.commons.PrinterConnectionType
 import expo.modules.printers.commons.PrinterDeviceData
@@ -24,7 +25,8 @@ class StarMicronicsPrinter(
 
     override suspend fun printImage(
         base64Image: String,
-        deviceData: PrinterDeviceData.Star
+        deviceData: PrinterDeviceData.Star,
+        paperWidth: PaperWidth?,
     ): StarMicronicsPrintResult {
         Log.d(
             TAG,
@@ -54,7 +56,7 @@ class StarMicronicsPrinter(
             emulation = StarModelCapability.getEmulation(modelIndex),
             portName = portName,
             portSettings = StarModelCapability.getPortSettings(modelIndex),
-            paperSize = StarModelCapability.getPaperSize(modelIndex),
+            paperSize = StarModelCapability.getPaperSize(modelIndex, paperWidth),
         )
     }
 

@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
 import android.util.Log
+import expo.modules.printers.commons.PaperWidth
 import expo.modules.printers.commons.Printer
 import expo.modules.printers.commons.PrinterDeviceData
 import expo.modules.printers.epson.internals.EpsonModelCapability
@@ -26,7 +27,8 @@ class EpsonPrinter(
 
     override suspend fun printImage(
         base64Image: String,
-        deviceData: PrinterDeviceData.EPSON
+        deviceData: PrinterDeviceData.EPSON,
+        paperWidth: PaperWidth?,
     ): EpsonPrintResult {
         val img: Bitmap = runCatching {
             val decodedString = Base64.decode(base64Image, Base64.DEFAULT)
@@ -45,15 +47,15 @@ class EpsonPrinter(
 
             epsonPrinter.connect(deviceData.target, EpsPrinter.PARAM_DEFAULT)
             try {
-                val paperWidth = if (EpsonModelCapability.supportsPaperWidthQuery(deviceData.deviceName)) {
-                    epsonPrinter.queryPaperWidth()
-                } else {
-                    null
+                val paperWidthSetting = when {
+                    paperWidth != null -> EpsonModelCapability.paperWidthSetting(paperWidth)
+                    EpsonModelCapability.supportsPaperWidthQuery(deviceData.deviceName) -> epsonPrinter.queryPaperWidth()
+                    else -> null
                 }
-                val printableWidth = EpsonModelCapability.printableWidth(printerSeries, paperWidth)
+                val printableWidth = EpsonModelCapability.printableWidth(printerSeries, paperWidthSetting)
                 Log.i(
                     TAG,
-                    "deviceName='${deviceData.deviceName}', paperWidth=$paperWidth, " +
+                    "deviceName='${deviceData.deviceName}', paperWidth=$paperWidth, paperWidthSetting=$paperWidthSetting, " +
                         "printableWidth=$printableWidth, imageWidth=${img.width}",
                 )
                 // The ePOS SDK has no scaling option, and an image wider than the print area can print nothing.

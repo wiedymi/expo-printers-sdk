@@ -5,6 +5,7 @@ import android.util.Log
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.printers.commons.NetworkValidator
+import expo.modules.printers.commons.PrintOptions
 import expo.modules.printers.commons.PrinterConnectionType
 import expo.modules.printers.commons.PrinterDeviceData
 import expo.modules.printers.commons.safeGetIntOrDefault
@@ -122,7 +123,7 @@ class RongtaPrintersModule : Module() {
             }.getOrElse { false }
         }
 
-        AsyncFunction("printImage") { base64Image: String, deviceData: Map<String, Any> ->
+        AsyncFunction("printImage") { base64Image: String, deviceData: Map<String, Any>, options: PrintOptions? ->
             if (printer == null) {
                 return@AsyncFunction false
             }
@@ -165,7 +166,7 @@ class RongtaPrintersModule : Module() {
                 }
 
                 coroutineScope.launch(Dispatchers.IO) {
-                    val result = printer?.printImage(base64Image, rongtaDeviceData)
+                    val result = printer?.printImage(base64Image, rongtaDeviceData, options?.paperWidth)
                     val success = result == RongtaPrintResult.Success
                     
                     sendEvent("onPrintImage", mapOf(

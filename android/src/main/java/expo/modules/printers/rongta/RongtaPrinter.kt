@@ -31,6 +31,7 @@ import com.rt.printerlibrary.factory.printer.ThermalPrinterFactory
 import com.rt.printerlibrary.setting.BitmapSetting
 import com.rt.printerlibrary.setting.CommonSetting
 import com.rt.printerlibrary.utils.ConnectListener
+import expo.modules.printers.commons.PaperWidth
 import expo.modules.printers.commons.Printer
 import expo.modules.printers.commons.PrinterDeviceData
 import expo.modules.printers.rongta.bluetooth.getBluetoothAdapter
@@ -58,14 +59,16 @@ class RongtaPrinter(
 
     override suspend fun printImage(
         base64Image: String,
-        deviceData: PrinterDeviceData.Rongta
+        deviceData: PrinterDeviceData.Rongta,
+        paperWidth: PaperWidth?,
     ): RongtaPrintResult = printMutex.withLock {
-        return@withLock sendPrintJob(base64Image, deviceData)
+        return@withLock sendPrintJob(base64Image, deviceData, paperWidth)
     }
 
     private suspend fun sendPrintJob(
         base64Image: String,
-        deviceData: PrinterDeviceData.Rongta
+        deviceData: PrinterDeviceData.Rongta,
+        paperWidth: PaperWidth?,
     ): RongtaPrintResult {
         Log.i(TAG, "sendPrintJob: Starting print job for deviceData: $deviceData")
         val configBean = when (val configResult = configurePrinter(deviceData)) {
@@ -116,7 +119,7 @@ class RongtaPrinter(
                     // Cancel connection timeout since we connected successfully
                     connectionTimeoutRunnable?.let { handler.removeCallbacks(it) }
                     Log.i(TAG, "onPrinterConnected: $configObj, connectState: ${printer.connectState}, thread: ${Thread.currentThread().name}")
-                    val printingCommand = createImagePrintCommand(img)
+                    val printingCommand = createImagePrintCommand(img, paperWidth)
                     if (printingCommand == null) {
                         Log.e(TAG, "failed to create printing command")
                         completeOnce(RongtaPrintResult.ErrorUnknown)
@@ -176,7 +179,7 @@ class RongtaPrinter(
         return result
     }
 
-    private fun createImagePrintCommand(image: Bitmap): ByteArray? {
+    private fun createImagePrintCommand(image: Bitmap, paperWidth: PaperWidth?): ByteArray? {
         val cmdFactory = EscFactory()
         val cmd = cmdFactory.create()
         cmd.append(cmd.headerCmd)
@@ -187,7 +190,10 @@ class RongtaPrinter(
         // getBitmapCmd scales down images wider than bimtapLimitWidth and keeps the aspect ratio.
         val bitmapSettings = BitmapSetting().apply {
             bmpPrintMode = BmpPrintMode.MODE_MULTI_COLOR
-            bimtapLimitWidth = MAX_PRINTER_WIDTH
+            bimtapLimitWidth = when (paperWidth) {
+                PaperWidth.MM58 -> PRINTABLE_WIDTH_58_MM
+                PaperWidth.MM80, null -> PRINTABLE_WIDTH_80_MM
+            }
         }
         try {
             cmd.append(cmd.getBitmapCmd(bitmapSettings, image))
@@ -395,7 +401,9 @@ class RongtaPrinter(
 
     companion object {
         private const val TAG = "RongtaPrinter"
-        private const val MAX_PRINTER_WIDTH = 576
+        // The SDK cannot report the paper width. 203 dpi: 48 mm printable on 58 mm paper, 72 mm on 80 mm paper.
+        private const val PRINTABLE_WIDTH_58_MM = 384
+        private const val PRINTABLE_WIDTH_80_MM = 576
         private val CONNECTION_TIMEOUT = 30.seconds
     }
 }
