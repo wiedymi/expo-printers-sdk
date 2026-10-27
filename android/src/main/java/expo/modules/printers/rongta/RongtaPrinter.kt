@@ -233,6 +233,8 @@ class RongtaPrinter(
                 else -> PaperStatus.OK
             },
             errors = buildList {
+                // Recoverable (mechanical) error, for example a paper jam. Epson's ePOS SDK reports it as MECHANICAL_ERR.
+                if ((errorCause and 0x04) != 0) add(PrinterError.MECHANICAL_ERROR)
                 if ((errorCause and 0x08) != 0) add(PrinterError.CUTTER_ERROR)
                 if ((errorCause and 0x20) != 0) add(PrinterError.UNRECOVERABLE_ERROR)
                 if ((errorCause and 0x40) != 0) add(PrinterError.AUTO_RECOVERABLE_ERROR)
