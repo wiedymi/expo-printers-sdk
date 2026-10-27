@@ -120,12 +120,14 @@ object EpsonModelCapability {
     private val thermal180Dpi = PrintableWidth(
         512, mapOf(Printer.SETTING_PAPERWIDTH_58_0 to 360, Printer.SETTING_PAPERWIDTH_80_0 to 512)
     )
+    // TM-U220 printable area is 385 or 400 half dots on 76 mm paper (DIP SW2-1), and one image dot is two half dots.
+    // These values fit both DIP switch settings.
     private val impact = PrintableWidth(
-        200,
+        192,
         mapOf(
-            Printer.SETTING_PAPERWIDTH_58_0 to 150,
+            Printer.SETTING_PAPERWIDTH_58_0 to 148,
             Printer.SETTING_PAPERWIDTH_70_0 to 180,
-            Printer.SETTING_PAPERWIDTH_76_0 to 200
+            Printer.SETTING_PAPERWIDTH_76_0 to 192
         )
     )
 
