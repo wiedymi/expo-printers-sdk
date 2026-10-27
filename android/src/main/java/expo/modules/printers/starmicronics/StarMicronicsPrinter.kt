@@ -12,6 +12,7 @@ import com.starmicronics.stario.StarResultCode
 import com.starmicronics.starioextension.ICommandBuilder
 import com.starmicronics.starioextension.ICommandBuilder.CutPaperAction
 import com.starmicronics.starioextension.StarIoExt
+import expo.modules.printers.commons.PaperWidth
 import expo.modules.printers.commons.Printer
 import expo.modules.printers.commons.PrinterConnectionType
 import expo.modules.printers.commons.PrinterDeviceData
@@ -24,7 +25,8 @@ class StarMicronicsPrinter(
 
     override suspend fun printImage(
         base64Image: String,
-        deviceData: PrinterDeviceData.Star
+        deviceData: PrinterDeviceData.Star,
+        paperWidth: PaperWidth?,
     ): StarMicronicsPrintResult {
         Log.d(
             TAG,
@@ -54,7 +56,7 @@ class StarMicronicsPrinter(
             emulation = StarModelCapability.getEmulation(modelIndex),
             portName = portName,
             portSettings = StarModelCapability.getPortSettings(modelIndex),
-            paperSize = StarModelCapability.getPaperSize(modelIndex),
+            paperSize = StarModelCapability.getPaperSize(modelIndex, paperWidth),
         )
     }
 
@@ -68,7 +70,7 @@ class StarMicronicsPrinter(
         val builder = StarIoExt.createCommandBuilder(emulation)
         builder.beginDocument()
 
-        val image = decodeAndScaleImage(base64Image, paperSize)
+        val image = decodeImage(base64Image)
             ?: return StarMicronicsPrintResult.InvalidImage
 
         builder.appendBitmap(
@@ -115,18 +117,11 @@ class StarMicronicsPrinter(
         }
     }
 
-    private fun decodeAndScaleImage(base64Image: String, paperSize: Int): Bitmap? = runCatching {
+    // appendBitmap scales the image to the paper width and keeps the aspect ratio (bothScale = true).
+    private fun decodeImage(base64Image: String): Bitmap? = runCatching {
         val decodedBytes = Base64.decode(base64Image, Base64.DEFAULT)
-        val decodedBitmap = BitmapFactory.decodeStream(ByteArrayInputStream(decodedBytes))
-            ?: return@runCatching null
-        if (decodedBitmap.width <= 0 || decodedBitmap.height <= 0) {
-            return@runCatching null
-        }
-
-        val scaledHeight = (decodedBitmap.height.toLong() * paperSize / decodedBitmap.width)
-            .coerceIn(1, Int.MAX_VALUE.toLong())
-            .toInt()
-        Bitmap.createScaledBitmap(decodedBitmap, paperSize, scaledHeight, true)
+        BitmapFactory.decodeStream(ByteArrayInputStream(decodedBytes))
+            ?.takeIf { it.width > 0 && it.height > 0 }
     }.getOrNull()
 
     private fun mapPrinterStatus(status: StarPrinterStatus): StarMicronicsPrintResult = when {

@@ -4,7 +4,7 @@ import type {
   EpsonPrintersModuleEvents,
   EpsonPrinterInfo,
 } from "./EpsonPrinters.types";
-import type { PrinterConnectionType } from "./commons";
+import type { PrinterConnectionType, PrintOptions } from "./commons";
 
 declare class EpsonPrintersModule extends NativeModule<EpsonPrintersModuleEvents> {
   findPrinters(connectionType: PrinterConnectionType): Promise<boolean>;
@@ -20,6 +20,7 @@ declare class EpsonPrintersModule extends NativeModule<EpsonPrintersModuleEvents
   printImage(
     base64Image: string,
     deviceData: EpsonPrinterInfo,
+    options?: PrintOptions,
   ): Promise<boolean>;
 }
 

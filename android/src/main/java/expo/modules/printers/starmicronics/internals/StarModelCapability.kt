@@ -2,6 +2,7 @@ package expo.modules.printers.starmicronics.internals
 
 import android.util.SparseArray
 import com.starmicronics.starioextension.StarIoExt.Emulation
+import expo.modules.printers.commons.PaperWidth
 
 /**
  * Minimal printer settings needed for bitmap printing.
@@ -204,7 +205,7 @@ object StarModelCapability {
         put(BSC10II, ModelInfo(
             "BSC10II",
             arrayOf("BSC10II (STR_T-001)", "BSC10II", "Star BSC10II"),
-            Emulation.StarPRNT, "", PAPER_SIZE_ESCPOS_THREE_INCH
+            Emulation.StarPRNT, "", PAPER_SIZE_THREE_INCH
         ))
 
         // SM-S series (StarPRNT mode)
@@ -265,7 +266,13 @@ object StarModelCapability {
 
     fun getPortSettings(model: Int): String = mModelCapabilityMap[model].defaultPortSettings
 
-    fun getPaperSize(model: Int): Int = mModelCapabilityMap[model].defaultPaperSize
+    // Three-inch thermal models also take 58 mm paper with a paper guide. mC-Label2 has the same width in dots,
+    // but it is a two-inch model. Other paper widths give the default paper size.
+    fun getPaperSize(model: Int, paperWidth: PaperWidth?): Int {
+        val defaultPaperSize = mModelCapabilityMap[model].defaultPaperSize
+        val isThreeInch = defaultPaperSize == PAPER_SIZE_THREE_INCH && model != MC_LABEL2
+        return if (paperWidth == PaperWidth.MM58 && isThreeInch) PAPER_SIZE_TWO_INCH else defaultPaperSize
+    }
 
     fun getModelIdx(modelNameSrc: String): Int {
         // Perfect match

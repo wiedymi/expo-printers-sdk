@@ -4,7 +4,7 @@ import type {
   RongtaPrintersModuleEvents,
   RongtaPrinterInfo,
 } from "./RongtaPrinters.types";
-import type { PrinterConnectionType } from "./commons";
+import type { PrinterConnectionType, PrintOptions } from "./commons";
 
 declare class RongtaPrintersModule extends NativeModule<RongtaPrintersModuleEvents> {
   findPrinters(connectionType: PrinterConnectionType): Promise<boolean>;
@@ -15,6 +15,7 @@ declare class RongtaPrintersModule extends NativeModule<RongtaPrintersModuleEven
   printImage(
     base64Image: string,
     deviceData: RongtaPrinterInfo,
+    options?: PrintOptions,
   ): Promise<boolean>;
 }
 

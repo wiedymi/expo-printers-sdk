@@ -254,6 +254,26 @@ bun run android
 type PrinterConnectionType = "Bluetooth" | "Network" | "USB";
 ```
 
+### Paper Width
+
+`printImage` scales the image to the printable width of the printer. The width comes from, in this order:
+
+1. `options.paperWidth`, when the app sets it.
+2. The paper width that the printer reports. Only the Epson TM-m30, TM-m30II, TM-m30II-H, TM-T20II, TM-T88VI, TM-P20 and TM-U220-i report it.
+3. The standard paper of the model (80 mm for most models). Rongta printers cannot report their model, so they use 80 mm.
+
+Set `paperWidth` for printers that have 58 mm paper and cannot report it, for example a 58 mm Rongta or a Star TSP100IV with the 58 mm paper guide.
+
+```typescript
+type PaperWidth = 58 | 80;
+
+type PrintOptions = {
+  paperWidth?: PaperWidth;
+};
+
+await RongtaPrinters.printImage(base64Image, printer, { paperWidth: 58 });
+```
+
 ### Epson Printers
 
 #### Types
@@ -296,7 +316,7 @@ EpsonPrinters.connectManually(
 EpsonPrinters.getSupportedModels(): Promise<string[]>
 
 // Print base64 image to printer
-EpsonPrinters.printImage(base64Image: string, deviceData: EpsonPrinterInfo): Promise<boolean>
+EpsonPrinters.printImage(base64Image: string, deviceData: EpsonPrinterInfo, options?: PrintOptions): Promise<boolean>
 
 // Event listener management
 EpsonPrinters.addListener(eventName: string, listener: Function): EventSubscription
@@ -352,7 +372,7 @@ RongtaPrinters.connectManually(
 ): Promise<RongtaPrinterInfo>
 
 // Print base64 image to printer
-RongtaPrinters.printImage(base64Image: string, deviceData: RongtaPrinterInfo): Promise<boolean>
+RongtaPrinters.printImage(base64Image: string, deviceData: RongtaPrinterInfo, options?: PrintOptions): Promise<boolean>
 ```
 
 ### Star Micronics Printers
@@ -391,7 +411,7 @@ StarMicronicsPrinters.connectManually(
 StarMicronicsPrinters.getSupportedModels(): Promise<string[]>
 
 // Print base64 image to printer
-StarMicronicsPrinters.printImage(base64Image: string, deviceData: StarMicronicsPrinterInfo): Promise<boolean>
+StarMicronicsPrinters.printImage(base64Image: string, deviceData: StarMicronicsPrinterInfo, options?: PrintOptions): Promise<boolean>
 ```
 
 ## Error Handling Best Practices
@@ -463,7 +483,7 @@ Rongta network discovery requires:
 ### Image Printing Issues
 
 - Verify image is valid base64 format
-- Check image dimensions (thermal printers have width limits)
+- If the right side of the receipt is cut off, set `paperWidth` to the paper in the printer (see [Paper Width](#paper-width))
 - Ensure image file size is reasonable
 - Test with simple black and white images first
 
