@@ -204,7 +204,7 @@ object StarModelCapability {
         put(BSC10II, ModelInfo(
             "BSC10II",
             arrayOf("BSC10II (STR_T-001)", "BSC10II", "Star BSC10II"),
-            Emulation.StarPRNT, "", PAPER_SIZE_ESCPOS_THREE_INCH
+            Emulation.StarPRNT, "", PAPER_SIZE_THREE_INCH
         ))
 
         // SM-S series (StarPRNT mode)

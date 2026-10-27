@@ -40,7 +40,6 @@ import kotlinx.coroutines.sync.withLock
 import java.io.ByteArrayInputStream
 import kotlin.coroutines.resume
 import kotlin.time.Duration.Companion.seconds
-import androidx.core.graphics.scale
 
 internal typealias PrinterConfigBean = Any
 
@@ -178,7 +177,6 @@ class RongtaPrinter(
     }
 
     private fun createImagePrintCommand(image: Bitmap): ByteArray? {
-        val scaledImage = scaleBitmap(image)
         val cmdFactory = EscFactory()
         val cmd = cmdFactory.create()
         cmd.append(cmd.headerCmd)
@@ -186,12 +184,13 @@ class RongtaPrinter(
             align = CommonEnum.ALIGN_MIDDLE
         }
         cmd.append(cmd.getCommonSettingCmd(commonSetting))
+        // getBitmapCmd scales down images wider than bimtapLimitWidth and keeps the aspect ratio.
         val bitmapSettings = BitmapSetting().apply {
             bmpPrintMode = BmpPrintMode.MODE_MULTI_COLOR
-            bimtapLimitWidth = scaledImage.width
+            bimtapLimitWidth = MAX_PRINTER_WIDTH
         }
         try {
-            cmd.append(cmd.getBitmapCmd(bitmapSettings, scaledImage))
+            cmd.append(cmd.getBitmapCmd(bitmapSettings, image))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to build bitmap command", e)
             return null
@@ -199,15 +198,6 @@ class RongtaPrinter(
         cmd.append(cmd.lfcrCmd)
         cmd.append(cmd.cmdCutNew)
         return cmd.appendCmds
-    }
-
-    private fun scaleBitmap(bitmap: Bitmap): Bitmap {
-        val newWidth = MAX_PRINTER_WIDTH
-        if (bitmap.width <= newWidth) {
-            return bitmap
-        }
-        val newHeight = (bitmap.height.toFloat() * newWidth / bitmap.width.toFloat()).toInt()
-        return bitmap.scale(newWidth, newHeight)
     }
 
     private suspend fun configureUsbPrinter(deviceData: PrinterDeviceData.Rongta.Type.Usb): ConfigurationResult {
