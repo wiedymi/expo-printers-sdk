@@ -35,6 +35,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The Epson printer disconnects after a failed print.
 - The Rongta wait for the end of a print had no time limit.
 - The Rongta connect timeout did not fire while the SDK `connect` call was blocked.
+- Release builds with R8 (on by default in Expo SDK 58) renamed vendor SDK classes that the SDKs find by name, for example `com.epson.epos2.Epos2Exception`. The library now ships keep rules for the Epson, Star and Rongta SDKs (`consumerProguardFiles`).
 
 ## [0.9.8] - 2026-07-22
 
