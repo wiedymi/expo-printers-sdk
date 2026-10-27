@@ -12,6 +12,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Optional `paperWidth` print option (`58` or `80`) on `printImage`, for printers that cannot report their paper width.
 - Epson paper width detection with `getPrinterSetting` on the TM-m30, TM-m30II, TM-m30II-H, TM-T20II, TM-T88VI, TM-P20 and TM-U220-i.
 - "Status" button in the example app.
+- Optional `jobId` print option. It is returned in every `onPrintImage` result and written in the native logs.
+- Time limits for every blocking printer SDK call (connect, status check, send, print result, disconnect). A call that hangs ends the print with a timeout error, and a connection that opens after its timeout is closed.
+- Star Bluetooth prints start again once on a new connection when the port does not open or the status check before the print fails. There is no retry after print data was sent.
+- Native logs for each print step with the job ID and its duration.
+- Star error code `PRINT_TIMEOUT`, and an Epson timeout result ("Printer did not answer in time").
 
 ### Changed
 
@@ -28,6 +33,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The Star BSC10II uses a paper width of 576 dots (was 512).
 - An Epson model name matches its longest known name, so "TM-m50II-H" no longer selects the TM-m50.
 - The Epson printer disconnects after a failed print.
+- The Rongta wait for the end of a print had no time limit.
+- The Rongta connect timeout did not fire while the SDK `connect` call was blocked.
 
 ## [0.9.8] - 2026-07-22
 

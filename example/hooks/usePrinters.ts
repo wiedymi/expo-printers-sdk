@@ -186,6 +186,8 @@ export const usePrinters = (manufacturer: Manufacturer) => {
       printerId: string,
     ): Promise<boolean> => {
       setPrintingStates((prev) => ({ ...prev, [printerId]: true }));
+      const options = { jobId: `test-${Date.now()}` };
+      console.log(`[Print] jobId: ${options.jobId}`);
 
       try {
         switch (printer.type) {
@@ -193,16 +195,19 @@ export const usePrinters = (manufacturer: Manufacturer) => {
             return await EpsonPrinters.printImage(
               base64Image,
               printer.info as EpsonPrinterInfo,
+              options,
             );
           case "RONGTA":
             return await RongtaPrinters.printImage(
               base64Image,
               printer.info as RongtaPrinterInfo,
+              options,
             );
           case "STAR":
             return await StarMicronicsPrinters.printImage(
               base64Image,
               printer.info as StarMicronicsPrinterInfo,
+              options,
             );
           default:
             throw new Error("Unknown printer type");

@@ -6,6 +6,9 @@ export type PaperWidth = 58 | 80;
 
 export type PrintOptions = {
   paperWidth?: PaperWidth;
+  // Returned in the onPrintImage event and written in the native logs,
+  // so the app can match a result to its job.
+  jobId?: string;
 };
 
 export type PaperStatus = "OK" | "NEAR_END" | "EMPTY" | "UNKNOWN";

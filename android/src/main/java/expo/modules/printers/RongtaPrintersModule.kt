@@ -133,10 +133,11 @@ class RongtaPrintersModule : Module() {
                 val rongtaDeviceData = deviceData.toRongtaDeviceData()
 
                 coroutineScope.launch(Dispatchers.IO) {
-                    val result = printer?.printImage(base64Image, rongtaDeviceData, options?.paperWidth)
+                    val result = printer?.printImage(base64Image, rongtaDeviceData, options?.paperWidth, options?.jobId)
                     val success = result == RongtaPrintResult.Success
                     
                     sendEvent("onPrintImage", mapOf(
+                        "jobId" to options?.jobId,
                         "success" to success,
                         "error" to when (result) {
                             RongtaPrintResult.ErrorInvalidImage -> "Invalid image data"
@@ -154,6 +155,7 @@ class RongtaPrintersModule : Module() {
             }.onFailure { e ->
                 Log.e(TAG, "Print failed", e)
                 sendEvent("onPrintImage", mapOf(
+                    "jobId" to options?.jobId,
                     "success" to false,
                     "error" to (e.localizedMessage ?: "Unknown error during printing")
                 ))

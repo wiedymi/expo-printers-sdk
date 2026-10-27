@@ -4,5 +4,6 @@ enum class EpsonPrintResult {
     Success,
     ErrorInvalidImage,
     ErrorPrinterOffline,
+    ErrorTimeout,
     ErrorUnknown,
 }

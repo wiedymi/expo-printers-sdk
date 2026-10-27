@@ -199,10 +199,14 @@ const fetchImageAsBase64 = async (imageUrl: string): Promise<string> => {
 // Print function with error handling
 const printImage = async (printer: EpsonPrinterInfo, imageUrl: string) => {
   try {
+    // A result that arrives late belongs to an earlier job, so match the job ID
+    const jobId = `receipt-${Date.now()}`;
+
     // Listen for print results
     const printListener = EpsonPrinters.addListener(
       "onPrintImage",
       (result) => {
+        if (result.jobId !== jobId) return;
         if (result.success) {
           Alert.alert("Success", "Image printed successfully!");
         } else {
@@ -216,7 +220,9 @@ const printImage = async (printer: EpsonPrinterInfo, imageUrl: string) => {
     const base64Image = await fetchImageAsBase64(imageUrl);
 
     // Initiate printing
-    const success = await EpsonPrinters.printImage(base64Image, printer);
+    const success = await EpsonPrinters.printImage(base64Image, printer, {
+      jobId,
+    });
     if (!success) {
       Alert.alert("Error", "Failed to initiate print job");
     }
@@ -269,6 +275,7 @@ type PaperWidth = 58 | 80;
 
 type PrintOptions = {
   paperWidth?: PaperWidth;
+  jobId?: string; // Returned in the onPrintImage result and written in the native logs
 };
 
 await RongtaPrinters.printImage(base64Image, printer, { paperWidth: 58 });
@@ -312,6 +319,24 @@ try {
 - Star uses `StarIOPort.retreiveStatus`.
 - Rongta sends the ESC/POS real-time status requests `DLE EOT 1-4`. A printer that does not answer them gives `ERR_PRINTER_STATUS_UNAVAILABLE`.
 
+### Timeouts and Retries
+
+Every blocking call to a printer SDK has a time limit. If a call hangs, for example in the Android Bluetooth stack, the print ends with a timeout error. The stuck call stays on its own thread, and a connection that it opens later is closed.
+
+| Step                        | Epson | Star | Rongta                      |
+| --------------------------- | ----- | ---- | --------------------------- |
+| Connect or open the port    | 20 s  | 15 s | 30 s (10 s for `getStatus`) |
+| Printer status before print | -     | 10 s | -                           |
+| Send the data               | 20 s  | 30 s | 30 s                        |
+| Print result                | -     | 35 s | 60 s                        |
+| Disconnect or release       | 5 s   | 5 s  | 5 s                         |
+
+- Star over Bluetooth: if the port does not open or the status check before the print fails, the print starts again once on a new connection after 1 second. There is no retry after print data was sent, so a receipt is not printed twice.
+- A print sends its `onPrintImage` result within about 2 minutes after it starts. Rongta prints one job at a time, so a Rongta job can first wait for the job before it.
+- Timeouts give the error code `PRINT_TIMEOUT` or `CONNECTION_TIMEOUT` on Star, and a timeout message on Epson and Rongta.
+- Set `jobId` in `PrintOptions` and compare it with `result.jobId`, so a late result is not counted for the next job.
+- The native logs show every step with its duration, for example `jobId=receipt-1 step=open_port outcome=ok stepMs=812 jobMs=830`. The log tags are `EpsonPrinter`, `StarMicronicsPrinter` and `RongtaPrinter`.
+
 ### Epson Printers
 
 #### Types
@@ -328,6 +353,7 @@ type EpsonPrinterInfo = {
 };
 
 type EpsonPrintResult = {
+  jobId: string | null; // jobId from PrintOptions
   success: boolean;
   error?: string; // Detailed error message if failed
 };
@@ -395,6 +421,7 @@ type RongtaPrinterType =
     };
 
 type RongtaPrintResult = {
+  jobId: string | null; // jobId from PrintOptions
   success: boolean;
   error?: string;
 };
@@ -433,6 +460,7 @@ type StarMicronicsPrinterInfo = {
 };
 
 type StarMicronicsPrintResult = {
+  jobId: string | null; // jobId from PrintOptions
   success: boolean;
   errorCode?: StarMicronicsPrintErrorCode;
   error?: string;

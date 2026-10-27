@@ -13,6 +13,7 @@ export type EpsonPrinterInfo = {
 };
 
 export type EpsonPrintResult = {
+  jobId: string | null;
   success: boolean;
   error?: string;
 };

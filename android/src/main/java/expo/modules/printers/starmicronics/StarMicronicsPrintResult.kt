@@ -10,6 +10,7 @@ enum class StarMicronicsPrintResult(
     PortOpenFailed("PORT_OPEN_FAILED", "Unable to connect to the printer"),
     PrinterInUse("PRINTER_IN_USE", "Printer is being used by another device"),
     ConnectionTimeout("CONNECTION_TIMEOUT", "Printer connection timed out"),
+    PrintTimeout("PRINT_TIMEOUT", "The printer did not answer in time during the print"),
     CommunicationError("COMMUNICATION_ERROR", "Communication with the printer failed"),
     PrinterOffline("PRINTER_OFFLINE", "Printer is offline"),
     CoverOpen("COVER_OPEN", "Printer cover is open"),

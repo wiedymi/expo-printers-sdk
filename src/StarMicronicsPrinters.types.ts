@@ -16,6 +16,7 @@ export type StarMicronicsPrintErrorCode =
   | "PORT_OPEN_FAILED"
   | "PRINTER_IN_USE"
   | "CONNECTION_TIMEOUT"
+  | "PRINT_TIMEOUT"
   | "COMMUNICATION_ERROR"
   | "PRINTER_OFFLINE"
   | "COVER_OPEN"
@@ -30,6 +31,7 @@ export type StarMicronicsPrintErrorCode =
   | "NOT_INITIALIZED";
 
 export type StarMicronicsPrintResult = {
+  jobId: string | null;
   success: boolean;
   errorCode?: StarMicronicsPrintErrorCode;
   error?: string;

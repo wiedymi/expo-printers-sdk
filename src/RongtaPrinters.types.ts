@@ -27,6 +27,7 @@ export type RongtaPrinterType =
     };
 
 export type RongtaPrintResult = {
+  jobId: string | null;
   success: boolean;
   error?: string;
 };

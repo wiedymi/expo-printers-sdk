@@ -129,14 +129,16 @@ class EpsonPrintersModule : Module() {
                 val epsonDeviceData = deviceData.toEpsonDeviceData()
 
                 coroutineScope.launch(Dispatchers.IO) {
-                    val result = printer?.printImage(base64Image, epsonDeviceData, options?.paperWidth)
+                    val result = printer?.printImage(base64Image, epsonDeviceData, options?.paperWidth, options?.jobId)
                     val success = result == EpsonPrintResult.Success
 
                     sendEvent("onPrintImage", mapOf(
+                        "jobId" to options?.jobId,
                         "success" to success,
                         "error" to when (result) {
                             EpsonPrintResult.ErrorInvalidImage -> "Invalid image data"
                             EpsonPrintResult.ErrorPrinterOffline -> "Printer is offline"
+                            EpsonPrintResult.ErrorTimeout -> "Printer did not answer in time"
                             EpsonPrintResult.ErrorUnknown -> "Unknown error occurred"
                             EpsonPrintResult.Success -> null
                             null -> "Printer not initialized"
@@ -147,6 +149,7 @@ class EpsonPrintersModule : Module() {
             }.onFailure { e ->
                 Log.e(TAG, "Print failed", e)
                 sendEvent("onPrintImage", mapOf(
+                    "jobId" to options?.jobId,
                     "success" to false,
                     "error" to (e.localizedMessage ?: "Unknown error during printing")
                 ))

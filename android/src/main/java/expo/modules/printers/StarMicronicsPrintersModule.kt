@@ -131,10 +131,11 @@ class StarMicronicsPrintersModule : Module() {
                 val starDeviceData = deviceData.toStarDeviceData()
 
                 coroutineScope.launch(Dispatchers.IO) {
-                    val result = printer?.printImage(base64Image, starDeviceData, options?.paperWidth)
+                    val result = printer?.printImage(base64Image, starDeviceData, options?.paperWidth, options?.jobId)
                     val success = result == StarMicronicsPrintResult.Success
 
                     sendEvent("onPrintImage", mapOf(
+                        "jobId" to options?.jobId,
                         "success" to success,
                         "errorCode" to if (success) null else result?.code ?: "NOT_INITIALIZED",
                         "error" to if (success) null else result?.message ?: "Printer not initialized",
@@ -144,6 +145,7 @@ class StarMicronicsPrintersModule : Module() {
             }.onFailure { e ->
                 Log.e(TAG, "Print failed", e)
                 sendEvent("onPrintImage", mapOf(
+                    "jobId" to options?.jobId,
                     "success" to false,
                     "errorCode" to "COMMUNICATION_ERROR",
                     "error" to (e.localizedMessage ?: "Unknown error during printing")

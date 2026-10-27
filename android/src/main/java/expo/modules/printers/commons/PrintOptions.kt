@@ -13,4 +13,8 @@ enum class PaperWidth(val value: Int) : Enumerable {
 class PrintOptions : Record {
     @Field
     val paperWidth: PaperWidth? = null
+
+    // Returned in the onPrintImage event and written in the logs, so the app can match a result to its job.
+    @Field
+    val jobId: String? = null
 }
