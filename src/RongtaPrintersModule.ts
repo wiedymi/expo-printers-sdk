@@ -4,7 +4,11 @@ import type {
   RongtaPrintersModuleEvents,
   RongtaPrinterInfo,
 } from "./RongtaPrinters.types";
-import type { PrinterConnectionType, PrintOptions } from "./commons";
+import type {
+  PrinterConnectionType,
+  PrinterStatus,
+  PrintOptions,
+} from "./commons";
 
 declare class RongtaPrintersModule extends NativeModule<RongtaPrintersModuleEvents> {
   findPrinters(connectionType: PrinterConnectionType): Promise<boolean>;
@@ -17,6 +21,7 @@ declare class RongtaPrintersModule extends NativeModule<RongtaPrintersModuleEven
     deviceData: RongtaPrinterInfo,
     options?: PrintOptions,
   ): Promise<boolean>;
+  getStatus(deviceData: RongtaPrinterInfo): Promise<PrinterStatus>;
 }
 
 // This call loads the native module object from the JSI.

@@ -2,6 +2,7 @@ package expo.modules.printers
 
 import android.content.Context
 import android.util.Log
+import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.printers.commons.NetworkValidator
@@ -19,6 +20,7 @@ import expo.modules.printers.starmicronics.internals.StarModelCapability
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class StarMicronicsPrintersModule : Module() {
     private val TAG = "StarMicronicsPrintersModule"
@@ -126,15 +128,7 @@ class StarMicronicsPrintersModule : Module() {
             }
 
             runCatching {
-                val connectionType = deviceData.safeGetString("connectionType").toPrinterConnectionType()
-
-                val starDeviceData = PrinterDeviceData.Star(
-                    connectionType = connectionType,
-                    modelName = deviceData.safeGetStringOrDefault("deviceName"),
-                    portName = deviceData.safeGetStringOrDefault("portName"),
-                    macAddress = deviceData.safeGetStringOrDefault("macAddress"),
-                    usbSerialNumber = deviceData.safeGetStringOrDefault("usbSerialNumber")
-                )
+                val starDeviceData = deviceData.toStarDeviceData()
 
                 coroutineScope.launch(Dispatchers.IO) {
                     val result = printer?.printImage(base64Image, starDeviceData, options?.paperWidth)
@@ -156,7 +150,22 @@ class StarMicronicsPrintersModule : Module() {
                 ))
             }.getOrElse { false }
         }
+
+        AsyncFunction("getStatus") Coroutine { deviceData: Map<String, Any> ->
+            val printer = requireNotNull(printer) { "Printer not initialized" }
+            withContext(Dispatchers.IO) {
+                printer.getStatus(deviceData.toStarDeviceData()).toMap()
+            }
+        }
     }
+
+    private fun Map<String, Any>.toStarDeviceData() = PrinterDeviceData.Star(
+        connectionType = safeGetString("connectionType").toPrinterConnectionType(),
+        modelName = safeGetStringOrDefault("deviceName"),
+        portName = safeGetStringOrDefault("portName"),
+        macAddress = safeGetStringOrDefault("macAddress"),
+        usbSerialNumber = safeGetStringOrDefault("usbSerialNumber")
+    )
 
     companion object {
         private const val STAR_NETWORK_PORT = 9100

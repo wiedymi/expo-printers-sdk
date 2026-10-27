@@ -2,6 +2,7 @@ package expo.modules.printers
 
 import android.content.Context
 import android.util.Log
+import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.printers.commons.NetworkValidator
@@ -129,41 +130,7 @@ class RongtaPrintersModule : Module() {
             }
 
             runCatching {
-                // Safe data extraction with utility functions
-                val connectionType = deviceData.safeGetString("connectionType").toPrinterConnectionType()
-                val typeData = deviceData.safeGetMap("type", "printer type data")
-                
-                val rongtaDeviceData = when (connectionType) {
-                    PrinterConnectionType.Bluetooth -> {
-                        PrinterDeviceData.Rongta(
-                            connectionType = connectionType,
-                            type = PrinterDeviceData.Rongta.Type.Bluetooth(
-                                alias = typeData.safeGetString("alias", "Bluetooth alias"),
-                                name = typeData.safeGetString("name", "Bluetooth name"),
-                                address = typeData.safeGetString("address", "Bluetooth address")
-                            )
-                        )
-                    }
-                    PrinterConnectionType.Network -> {
-                        PrinterDeviceData.Rongta(
-                            connectionType = connectionType,
-                            type = PrinterDeviceData.Rongta.Type.Network(
-                                ipAddress = typeData.safeGetString("ipAddress", "Network IP address"),
-                                port = typeData.safeGetIntOrDefault("port", 9100)
-                            )
-                        )
-                    }
-                    PrinterConnectionType.USB -> {
-                        PrinterDeviceData.Rongta(
-                            connectionType = connectionType,
-                            type = PrinterDeviceData.Rongta.Type.Usb(
-                                name = typeData.safeGetString("name", "USB name"),
-                                vendorId = typeData.safeGetIntOrDefault("vendorId", 0),
-                                productId = typeData.safeGetIntOrDefault("productId", 0)
-                            )
-                        )
-                    }
-                }
+                val rongtaDeviceData = deviceData.toRongtaDeviceData()
 
                 coroutineScope.launch(Dispatchers.IO) {
                     val result = printer?.printImage(base64Image, rongtaDeviceData, options?.paperWidth)
@@ -191,6 +158,50 @@ class RongtaPrintersModule : Module() {
                     "error" to (e.localizedMessage ?: "Unknown error during printing")
                 ))
             }.getOrElse { false }
+        }
+
+        AsyncFunction("getStatus") Coroutine { deviceData: Map<String, Any> ->
+            val printer = requireNotNull(printer) { "Printer not initialized" }
+            withContext(Dispatchers.IO) {
+                printer.getStatus(deviceData.toRongtaDeviceData()).toMap()
+            }
+        }
+    }
+
+    private fun Map<String, Any>.toRongtaDeviceData(): PrinterDeviceData.Rongta {
+        val connectionType = safeGetString("connectionType").toPrinterConnectionType()
+        val typeData = safeGetMap("type", "printer type data")
+
+        return when (connectionType) {
+            PrinterConnectionType.Bluetooth -> {
+                PrinterDeviceData.Rongta(
+                    connectionType = connectionType,
+                    type = PrinterDeviceData.Rongta.Type.Bluetooth(
+                        alias = typeData.safeGetString("alias", "Bluetooth alias"),
+                        name = typeData.safeGetString("name", "Bluetooth name"),
+                        address = typeData.safeGetString("address", "Bluetooth address")
+                    )
+                )
+            }
+            PrinterConnectionType.Network -> {
+                PrinterDeviceData.Rongta(
+                    connectionType = connectionType,
+                    type = PrinterDeviceData.Rongta.Type.Network(
+                        ipAddress = typeData.safeGetString("ipAddress", "Network IP address"),
+                        port = typeData.safeGetIntOrDefault("port", 9100)
+                    )
+                )
+            }
+            PrinterConnectionType.USB -> {
+                PrinterDeviceData.Rongta(
+                    connectionType = connectionType,
+                    type = PrinterDeviceData.Rongta.Type.Usb(
+                        name = typeData.safeGetString("name", "USB name"),
+                        vendorId = typeData.safeGetIntOrDefault("vendorId", 0),
+                        productId = typeData.safeGetIntOrDefault("productId", 0)
+                    )
+                )
+            }
         }
     }
 } 

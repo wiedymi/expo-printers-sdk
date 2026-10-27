@@ -2,6 +2,7 @@ package expo.modules.printers
 
 import android.content.Context
 import android.util.Log
+import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.printers.commons.NetworkValidator
@@ -125,19 +126,7 @@ class EpsonPrintersModule : Module() {
             }
 
             runCatching {
-                // Safe data extraction with utility functions
-                val connectionType = deviceData.safeGetString("connectionType").toPrinterConnectionType()
-                val deviceType = deviceData.safeGetInt("deviceType")
-
-                val epsonDeviceData = PrinterDeviceData.EPSON(
-                    connectionType = connectionType,
-                    deviceType = deviceType,
-                    target = deviceData.safeGetStringOrDefault("target"),
-                    deviceName = deviceData.safeGetStringOrDefault("deviceName"),
-                    ipAddress = deviceData.safeGetStringOrDefault("ipAddress"),
-                    macAddress = deviceData.safeGetStringOrDefault("macAddress"),
-                    bdAddress = deviceData.safeGetStringOrDefault("bdAddress")
-                )
+                val epsonDeviceData = deviceData.toEpsonDeviceData()
 
                 coroutineScope.launch(Dispatchers.IO) {
                     val result = printer?.printImage(base64Image, epsonDeviceData, options?.paperWidth)
@@ -163,5 +152,22 @@ class EpsonPrintersModule : Module() {
                 ))
             }.getOrElse { false }
         }
+
+        AsyncFunction("getStatus") Coroutine { deviceData: Map<String, Any> ->
+            val printer = requireNotNull(printer) { "Printer not initialized" }
+            withContext(Dispatchers.IO) {
+                printer.getStatus(deviceData.toEpsonDeviceData()).toMap()
+            }
+        }
     }
+
+    private fun Map<String, Any>.toEpsonDeviceData() = PrinterDeviceData.EPSON(
+        connectionType = safeGetString("connectionType").toPrinterConnectionType(),
+        deviceType = safeGetInt("deviceType"),
+        target = safeGetStringOrDefault("target"),
+        deviceName = safeGetStringOrDefault("deviceName"),
+        ipAddress = safeGetStringOrDefault("ipAddress"),
+        macAddress = safeGetStringOrDefault("macAddress"),
+        bdAddress = safeGetStringOrDefault("bdAddress")
+    )
 }

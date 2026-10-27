@@ -274,6 +274,44 @@ type PrintOptions = {
 await RongtaPrinters.printImage(base64Image, printer, { paperWidth: 58 });
 ```
 
+### Printer Status
+
+`getStatus` connects to the printer, reads its status, and disconnects. Use it before you print, for example to show "Paper is empty" to the user.
+
+```typescript
+type PaperStatus = "OK" | "NEAR_END" | "EMPTY" | "UNKNOWN";
+
+type PrinterError =
+  | "CUTTER_ERROR"
+  | "MECHANICAL_ERROR"
+  | "PAPER_JAM"
+  | "OVER_TEMPERATURE"
+  | "VOLTAGE_ERROR"
+  | "AUTO_RECOVERABLE_ERROR"
+  | "UNRECOVERABLE_ERROR"
+  | "UNKNOWN_ERROR"; // The printer reports an error, but not which kind.
+
+type PrinterStatus = {
+  online: boolean; // The printer reports that it is ready to print.
+  coverOpen: boolean;
+  paper: PaperStatus;
+  errors: PrinterError[]; // Empty when the printer reports no error.
+};
+
+try {
+  const status = await EpsonPrinters.getStatus(printer);
+  if (!status.online) {
+    // Show status.coverOpen, status.paper and status.errors to the user.
+  }
+} catch (error) {
+  // error.code: "ERR_PRINTER_UNREACHABLE", "ERR_PRINTER_BUSY" or "ERR_PRINTER_STATUS_UNAVAILABLE"
+}
+```
+
+- Epson uses `Printer.getStatus` of the ePOS SDK.
+- Star uses `StarIOPort.retreiveStatus`.
+- Rongta sends the ESC/POS real-time status requests `DLE EOT 1-4`. A printer that does not answer them gives `ERR_PRINTER_STATUS_UNAVAILABLE`.
+
 ### Epson Printers
 
 #### Types
@@ -317,6 +355,9 @@ EpsonPrinters.getSupportedModels(): Promise<string[]>
 
 // Print base64 image to printer
 EpsonPrinters.printImage(base64Image: string, deviceData: EpsonPrinterInfo, options?: PrintOptions): Promise<boolean>
+
+// Read printer status (see Printer Status)
+EpsonPrinters.getStatus(deviceData: EpsonPrinterInfo): Promise<PrinterStatus>
 
 // Event listener management
 EpsonPrinters.addListener(eventName: string, listener: Function): EventSubscription
@@ -373,6 +414,9 @@ RongtaPrinters.connectManually(
 
 // Print base64 image to printer
 RongtaPrinters.printImage(base64Image: string, deviceData: RongtaPrinterInfo, options?: PrintOptions): Promise<boolean>
+
+// Read printer status (see Printer Status)
+RongtaPrinters.getStatus(deviceData: RongtaPrinterInfo): Promise<PrinterStatus>
 ```
 
 ### Star Micronics Printers
@@ -412,6 +456,9 @@ StarMicronicsPrinters.getSupportedModels(): Promise<string[]>
 
 // Print base64 image to printer
 StarMicronicsPrinters.printImage(base64Image: string, deviceData: StarMicronicsPrinterInfo, options?: PrintOptions): Promise<boolean>
+
+// Read printer status (see Printer Status)
+StarMicronicsPrinters.getStatus(deviceData: StarMicronicsPrinterInfo): Promise<PrinterStatus>
 ```
 
 ## Error Handling Best Practices

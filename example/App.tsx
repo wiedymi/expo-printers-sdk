@@ -41,6 +41,7 @@ export default function App() {
     searchPrinters,
     connectManually,
     printImage,
+    getStatus,
     refreshSupportedModels,
   } = usePrinters(selectedManufacturer);
 
@@ -114,6 +115,24 @@ export default function App() {
     }
   };
 
+  const handleStatus = async (printer: PrinterInfo) => {
+    console.log(`[Status] Reading status of ${getUniquePrinterId(printer)}...`);
+    try {
+      const status = await getStatus(printer);
+      console.log("[Status] Result:", status);
+      Alert.alert(
+        status.online ? "Online" : "Offline",
+        `Cover open: ${status.coverOpen}\nPaper: ${status.paper}\nErrors: ${
+          status.errors.join(", ") || "none"
+        }`,
+      );
+    } catch (error) {
+      const code = (error as { code?: string }).code ?? "UNKNOWN";
+      console.error(`[Status] Failed (${code}):`, error);
+      Alert.alert("Status Failed", code);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
@@ -137,6 +156,7 @@ export default function App() {
           isSearching={isSearching}
           printingStates={printingStates}
           onPrint={handlePrint}
+          onStatus={handleStatus}
         />
 
         <LogViewer logs={logs} onClear={clearLogs} maxHeight={180} />

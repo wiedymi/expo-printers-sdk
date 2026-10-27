@@ -12,10 +12,16 @@ import com.starmicronics.stario.StarResultCode
 import com.starmicronics.starioextension.ICommandBuilder
 import com.starmicronics.starioextension.ICommandBuilder.CutPaperAction
 import com.starmicronics.starioextension.StarIoExt
+import expo.modules.printers.commons.PaperStatus
 import expo.modules.printers.commons.PaperWidth
 import expo.modules.printers.commons.Printer
+import expo.modules.printers.commons.PrinterBusyException
 import expo.modules.printers.commons.PrinterConnectionType
 import expo.modules.printers.commons.PrinterDeviceData
+import expo.modules.printers.commons.PrinterError
+import expo.modules.printers.commons.PrinterStatus
+import expo.modules.printers.commons.PrinterStatusUnavailableException
+import expo.modules.printers.commons.PrinterUnreachableException
 import expo.modules.printers.starmicronics.internals.StarModelCapability
 import java.io.ByteArrayInputStream
 
@@ -28,6 +34,52 @@ class StarMicronicsPrinter(
         deviceData: PrinterDeviceData.Star,
         paperWidth: PaperWidth?,
     ): StarMicronicsPrintResult {
+        val modelIndex = modelIndexOf(deviceData) ?: return StarMicronicsPrintResult.UnsupportedModel
+
+        return print(
+            base64Image = base64Image,
+            emulation = StarModelCapability.getEmulation(modelIndex),
+            portName = portNameOf(deviceData),
+            portSettings = StarModelCapability.getPortSettings(modelIndex),
+            paperSize = StarModelCapability.getPaperSize(modelIndex, paperWidth),
+        )
+    }
+
+    override suspend fun getStatus(deviceData: PrinterDeviceData.Star): PrinterStatus {
+        val modelIndex = requireNotNull(modelIndexOf(deviceData)) { "Unsupported Star model: ${deviceData.modelName}" }
+        val portName = portNameOf(deviceData)
+
+        val port = try {
+            StarIOPort.getPort(
+                portName,
+                StarModelCapability.getPortSettings(modelIndex),
+                CONNECTION_TIMEOUT_MILLISECONDS,
+                appContext,
+            )
+        } catch (throwable: Exception) {
+            logPrinterError("open port for status", throwable, portName)
+            throw if (mapPortException(throwable, StarMicronicsPrintResult.PortOpenFailed) == StarMicronicsPrintResult.PrinterInUse) {
+                PrinterBusyException(throwable)
+            } else {
+                PrinterUnreachableException(throwable)
+            }
+        }
+
+        return try {
+            port.retreiveStatus().toPrinterStatus()
+        } catch (throwable: Exception) {
+            logPrinterError("retrieve status", throwable, portName)
+            throw PrinterStatusUnavailableException(throwable)
+        } finally {
+            try {
+                StarIOPort.releasePort(port)
+            } catch (throwable: Exception) {
+                logPrinterError("release port", throwable, portName)
+            }
+        }
+    }
+
+    private fun modelIndexOf(deviceData: PrinterDeviceData.Star): Int? {
         Log.d(
             TAG,
             "Identifying printer modelName='${deviceData.modelName}', portName='${deviceData.portName}'",
@@ -42,23 +94,41 @@ class StarMicronicsPrinter(
                 TAG,
                 "Unsupported printer modelName='${deviceData.modelName}', supportedModels=${StarModelCapability.getSupportedModels()}",
             )
-            return StarMicronicsPrintResult.UnsupportedModel
+            return null
         }
+        return modelIndex
+    }
 
-        val portName = if (deviceData.connectionType == PrinterConnectionType.Bluetooth) {
+    private fun portNameOf(deviceData: PrinterDeviceData.Star): String =
+        if (deviceData.connectionType == PrinterConnectionType.Bluetooth) {
             "BT:${deviceData.macAddress}"
         } else {
             deviceData.portName
         }
 
-        return print(
-            base64Image = base64Image,
-            emulation = StarModelCapability.getEmulation(modelIndex),
-            portName = portName,
-            portSettings = StarModelCapability.getPortSettings(modelIndex),
-            paperSize = StarModelCapability.getPaperSize(modelIndex, paperWidth),
-        )
-    }
+    private fun StarPrinterStatus.toPrinterStatus() = PrinterStatus(
+        online = !offline,
+        coverOpen = coverOpen,
+        paper = when {
+            receiptPaperEmpty -> PaperStatus.EMPTY
+            receiptPaperNearEmptyInner || receiptPaperNearEmptyOuter -> PaperStatus.NEAR_END
+            else -> PaperStatus.OK
+        },
+        errors = buildList {
+            if (cutterError) add(PrinterError.CUTTER_ERROR)
+            if (mechError || headThermistorError) add(PrinterError.MECHANICAL_ERROR)
+            if (jamError || presenterPaperJamError) add(PrinterError.PAPER_JAM)
+            if (overTemp) add(PrinterError.OVER_TEMPERATURE)
+            if (voltageError) add(PrinterError.VOLTAGE_ERROR)
+            if (unrecoverableError) add(PrinterError.UNRECOVERABLE_ERROR)
+            if (
+                pageModeCmdError || paperDetectionError || blackMarkError ||
+                headUpError || rollPositionError || receiveBufferOverflow
+            ) {
+                add(PrinterError.UNKNOWN_ERROR)
+            }
+        },
+    )
 
     private fun print(
         base64Image: String,

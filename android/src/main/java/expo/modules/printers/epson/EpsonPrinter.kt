@@ -5,14 +5,21 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
 import android.util.Log
+import expo.modules.printers.commons.PaperStatus
 import expo.modules.printers.commons.PaperWidth
 import expo.modules.printers.commons.Printer
+import expo.modules.printers.commons.PrinterBusyException
 import expo.modules.printers.commons.PrinterDeviceData
+import expo.modules.printers.commons.PrinterError
+import expo.modules.printers.commons.PrinterStatus
+import expo.modules.printers.commons.PrinterStatusUnavailableException
+import expo.modules.printers.commons.PrinterUnreachableException
 import expo.modules.printers.epson.internals.EpsonModelCapability
 import com.epson.epos2.Epos2CallbackCode
 import com.epson.epos2.Epos2Exception
 import com.epson.epos2.printer.Printer as EpsPrinter
 import com.epson.epos2.printer.PrinterSettingListener
+import com.epson.epos2.printer.PrinterStatusInfo
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
@@ -98,6 +105,60 @@ class EpsonPrinter(
             }
         )
     }
+
+    override suspend fun getStatus(deviceData: PrinterDeviceData.EPSON): PrinterStatus {
+        val printerSeries = EpsonModelCapability.printerSeriesByName(deviceData.deviceName)
+        require(printerSeries != EpsonModelCapability.UNKNOWN) { "Unsupported Epson model: ${deviceData.deviceName}" }
+
+        val epsonPrinter = EpsPrinter(printerSeries, EpsPrinter.LANG_EN, appContext)
+        try {
+            epsonPrinter.connect(deviceData.target, EpsPrinter.PARAM_DEFAULT)
+        } catch (exception: Epos2Exception) {
+            Log.e(TAG, "getStatus: connect failed with status ${exception.errorStatus}")
+            throw if (exception.errorStatus == Epos2Exception.ERR_IN_USE) {
+                PrinterBusyException(exception)
+            } else {
+                PrinterUnreachableException(exception)
+            }
+        }
+
+        try {
+            val statusInfo = epsonPrinter.status
+            if (statusInfo.connection != EpsPrinter.TRUE) throw PrinterStatusUnavailableException()
+            return statusInfo.toPrinterStatus()
+        } finally {
+            runCatching { epsonPrinter.disconnect() }
+                .onFailure { throwable -> Log.e(TAG, "getStatus: failed to disconnect $throwable") }
+        }
+    }
+
+    private fun PrinterStatusInfo.toPrinterStatus() = PrinterStatus(
+        online = online == EpsPrinter.TRUE,
+        coverOpen = coverOpen == EpsPrinter.TRUE,
+        paper = when (paper) {
+            EpsPrinter.PAPER_OK -> PaperStatus.OK
+            EpsPrinter.PAPER_NEAR_END -> PaperStatus.NEAR_END
+            EpsPrinter.PAPER_EMPTY -> PaperStatus.EMPTY
+            else -> PaperStatus.UNKNOWN
+        },
+        errors = listOfNotNull(
+            when (errorStatus) {
+                EpsPrinter.MECHANICAL_ERR -> PrinterError.MECHANICAL_ERROR
+                EpsPrinter.AUTOCUTTER_ERR -> PrinterError.CUTTER_ERROR
+                EpsPrinter.UNRECOVER_ERR -> PrinterError.UNRECOVERABLE_ERROR
+                EpsPrinter.AUTORECOVER_ERR -> when (autoRecoverError) {
+                    EpsPrinter.HEAD_OVERHEAT,
+                    EpsPrinter.MOTOR_OVERHEAT,
+                    EpsPrinter.BATTERY_OVERHEAT -> PrinterError.OVER_TEMPERATURE
+                    // coverOpen already reports this.
+                    EpsPrinter.COVER_OPEN -> null
+                    else -> PrinterError.AUTO_RECOVERABLE_ERROR
+                }
+                EpsPrinter.NO_ERR, EpsPrinter.UNKNOWN -> null
+                else -> PrinterError.UNKNOWN_ERROR
+            }
+        ),
+    )
 
     // Returns a Printer.SETTING_PAPERWIDTH_* value, or null if the printer does not report it. Needs a connection.
     private suspend fun EpsPrinter.queryPaperWidth(): Int? =
