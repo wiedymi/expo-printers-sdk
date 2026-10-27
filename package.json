@@ -5,13 +5,9 @@
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "scripts": {
-    "build": "expo-module build",
-    "clean": "expo-module clean",
-    "lint": "expo-module lint",
-    "test": "expo-module test",
-    "prepare": "expo-module prepare",
-    "prepublishOnly": "expo-module prepublishOnly",
-    "expo-module": "expo-module",
+    "build": "tsc",
+    "clean": "rm -rf build",
+    "prepare": "rm -rf build && tsc",
     "open:ios": "xed example/ios",
     "open:android": "open -a \"Android Studio\" example/android"
   },
@@ -37,11 +33,11 @@
   "homepage": "https://github.com/wiedymi/expo-printers-sdk#readme",
   "dependencies": {},
   "devDependencies": {
-    "@types/react": "~18.3.12",
-    "expo-module-scripts": "^4.1.10",
-    "expo": "~52.0.47",
-    "react": "18.3.1",
-    "react-native": "0.76.0"
+    "@types/react": "19.3.0",
+    "expo": "58.0.19",
+    "react": "19.3.0",
+    "react-native": "0.88.0",
+    "typescript": "6.0.3"
   },
   "peerDependencies": {
     "expo": "*",

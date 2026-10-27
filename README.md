@@ -241,8 +241,8 @@ Check out our comprehensive example app in the `/example` folder that demonstrat
 
 ```bash
 cd example
-npm install
-npm run android
+bun install
+bun run android
 ```
 
 ## API Reference
@@ -506,12 +506,12 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 ```bash
 git clone https://github.com/your-org/expo-printers-sdk.git
 cd expo-printers-sdk
-npm install
+bun install
 
 # Run the example
 cd example
-npm install
-npm run android
+bun install
+bun run android
 ```
 
 ## Version History
