@@ -32,7 +32,7 @@ type CompactPrinterSelectorProps = {
   onManualConnect: (
     ipAddress: string,
     modelName: string,
-    port: number
+    port: number,
   ) => Promise<void>;
 };
 
@@ -57,7 +57,10 @@ const CompactPrinterSelector: React.FC<CompactPrinterSelectorProps> = ({
 
   const handleManualConnect = async () => {
     if (!ipAddress.trim()) return;
-    if ((manufacturer === "EPSON" || manufacturer === "STAR") && !modelName.trim()) {
+    if (
+      (manufacturer === "EPSON" || manufacturer === "STAR") &&
+      !modelName.trim()
+    ) {
       return;
     }
     const portNum = parseInt(port, 10);
@@ -70,7 +73,7 @@ const CompactPrinterSelector: React.FC<CompactPrinterSelectorProps> = ({
   };
 
   const filteredModels = supportedModels.filter((m) =>
-    m.toLowerCase().includes(modelSearch.toLowerCase())
+    m.toLowerCase().includes(modelSearch.toLowerCase()),
   );
 
   return (
@@ -116,7 +119,7 @@ const CompactPrinterSelector: React.FC<CompactPrinterSelectorProps> = ({
                 {type}
               </Text>
             </TouchableOpacity>
-          )
+          ),
         )}
       </View>
 
@@ -157,7 +160,8 @@ const CompactPrinterSelector: React.FC<CompactPrinterSelectorProps> = ({
         <TouchableOpacity
           style={[
             styles.actionBtn,
-            (isSearching || isRequestingPermissions) && styles.actionBtnDisabled,
+            (isSearching || isRequestingPermissions) &&
+              styles.actionBtnDisabled,
           ]}
           onPress={onSearch}
           disabled={isSearching || isRequestingPermissions}
@@ -229,7 +233,10 @@ const CompactPrinterSelector: React.FC<CompactPrinterSelectorProps> = ({
                 {supportedModels.slice(0, 12).map((model) => (
                   <TouchableOpacity
                     key={model}
-                    style={[styles.modelChip, modelName === model && styles.modelChipActive]}
+                    style={[
+                      styles.modelChip,
+                      modelName === model && styles.modelChipActive,
+                    ]}
                     onPress={() => setModelName(model)}
                   >
                     <Text

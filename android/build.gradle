@@ -1,35 +1,10 @@
-apply plugin: 'com.android.library'
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
 
 group = 'expo.modules.printers'
 version = '0.9.8'
-
-def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
-apply from: expoModulesCorePlugin
-applyKotlinExpoModulesCorePlugin()
-useCoreDependencies()
-useExpoPublishing()
-
-// If you want to use the managed Android SDK versions from expo-modules-core, set this to true.
-// The Android SDK versions will be bumped from time to time in SDK releases and may introduce breaking changes in your module code.
-// Most of the time, you may like to manage the Android SDK versions yourself.
-def useManagedAndroidSdkVersions = false
-if (useManagedAndroidSdkVersions) {
-  useDefaultAndroidSdkVersions()
-} else {
-  buildscript {
-    // Simple helper that allows the root project to override versions declared by this library.
-    ext.safeExtGet = { prop, fallback ->
-      rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
-    }
-  }
-  project.android {
-    compileSdkVersion safeExtGet("compileSdkVersion", 34)
-    defaultConfig {
-      minSdkVersion safeExtGet("minSdkVersion", 21)
-      targetSdkVersion safeExtGet("targetSdkVersion", 34)
-    }
-  }
-}
 
 android {
   namespace "expo.modules.printers"
@@ -40,22 +15,14 @@ android {
   lintOptions {
     abortOnError false
   }
-  sourceSets {
-    main {
-      jniLibs.srcDirs = ["src/main/jniLibs"]
-    }
-  }
 }
 
-
-
 dependencies {
-    implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation files('libs/ePOS2.jar')
     implementation files('libs/rongta_library.jar')
 
-    implementation 'com.starmicronics:stario:2.10.1'
-    implementation 'com.starmicronics:starioextension:1.15.1'
+    implementation 'com.starmicronics:stario:2.14.2'
+    implementation 'com.starmicronics:starioextension:1.17.0'
 
-    implementation 'androidx.core:core-ktx:1.15.0'
+    implementation 'androidx.core:core-ktx:1.18.0'
 }

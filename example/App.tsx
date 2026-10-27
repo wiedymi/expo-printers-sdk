@@ -46,7 +46,9 @@ export default function App() {
 
   const handleSearch = async () => {
     try {
-      console.log(`[Search] Starting ${selectedManufacturer} ${selectedConnectionType} search...`);
+      console.log(
+        `[Search] Starting ${selectedManufacturer} ${selectedConnectionType} search...`,
+      );
       const hasPermissions = await requestPermissions();
       if (!hasPermissions) {
         console.warn("[Search] Permissions not granted");
@@ -64,16 +66,18 @@ export default function App() {
   const handleManualConnect = async (
     ipAddress: string,
     modelName: string,
-    port: number
+    port: number,
   ) => {
     try {
-      console.log(`[Manual] Connecting to ${selectedManufacturer} @ ${ipAddress}:${port}...`);
+      console.log(
+        `[Manual] Connecting to ${selectedManufacturer} @ ${ipAddress}:${port}...`,
+      );
       const printerInfo = await connectManually(ipAddress, modelName, port);
       if (printerInfo) {
         console.log("[Manual] Connected successfully:", printerInfo);
         Alert.alert(
           "Connected",
-          `${selectedManufacturer} ${modelName} @ ${ipAddress}:${port}`
+          `${selectedManufacturer} ${modelName} @ ${ipAddress}:${port}`,
         );
       }
     } catch (error) {
@@ -90,7 +94,9 @@ export default function App() {
     try {
       console.log("[Print] Fetching test image...");
       const base64Image = await fetchImageAsBase64(TEST_IMAGE_URL);
-      console.log(`[Print] Image fetched (${base64Image.length} chars), sending to printer...`);
+      console.log(
+        `[Print] Image fetched (${base64Image.length} chars), sending to printer...`,
+      );
 
       const result = await printImage(base64Image, printer, printerId);
       console.log(`[Print] printImage returned: ${result}`);
@@ -103,7 +109,7 @@ export default function App() {
       console.error("[Print] Error:", error);
       Alert.alert(
         "Print Failed",
-        error instanceof Error ? error.message : "Unknown error occurred"
+        error instanceof Error ? error.message : "Unknown error occurred",
       );
     }
   };
