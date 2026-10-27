@@ -11,6 +11,7 @@ import type {
   EpsonPrintResult,
   RongtaPrintResult,
   StarMicronicsPrintResult,
+  PaperWidth,
   PrinterConnectionType,
   PrinterStatus,
 } from "expo-printers-sdk";
@@ -184,8 +185,13 @@ export const usePrinters = (manufacturer: Manufacturer) => {
       base64Image: string,
       printer: PrinterInfo,
       printerId: string,
+      paperWidth?: PaperWidth,
     ): Promise<boolean> => {
       setPrintingStates((prev) => ({ ...prev, [printerId]: true }));
+      const options = { jobId: `test-${Date.now()}`, paperWidth };
+      console.log(
+        `[Print] jobId: ${options.jobId}, paperWidth: ${paperWidth ?? "auto"}`,
+      );
 
       try {
         switch (printer.type) {
@@ -193,16 +199,19 @@ export const usePrinters = (manufacturer: Manufacturer) => {
             return await EpsonPrinters.printImage(
               base64Image,
               printer.info as EpsonPrinterInfo,
+              options,
             );
           case "RONGTA":
             return await RongtaPrinters.printImage(
               base64Image,
               printer.info as RongtaPrinterInfo,
+              options,
             );
           case "STAR":
             return await StarMicronicsPrinters.printImage(
               base64Image,
               printer.info as StarMicronicsPrinterInfo,
+              options,
             );
           default:
             throw new Error("Unknown printer type");

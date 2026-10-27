@@ -7,6 +7,8 @@ import android.util.Base64
 import android.util.Log
 import expo.modules.printers.commons.PaperStatus
 import expo.modules.printers.commons.PaperWidth
+import expo.modules.printers.commons.PrintStepTimeoutException
+import expo.modules.printers.commons.PrintSteps
 import expo.modules.printers.commons.Printer
 import expo.modules.printers.commons.PrinterBusyException
 import expo.modules.printers.commons.PrinterDeviceData
@@ -27,6 +29,7 @@ import java.io.ByteArrayInputStream
 import kotlin.coroutines.resume
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 class EpsonPrinter(
     private val appContext: Context,
@@ -36,14 +39,19 @@ class EpsonPrinter(
         base64Image: String,
         deviceData: PrinterDeviceData.EPSON,
         paperWidth: PaperWidth?,
+        jobId: String?,
     ): EpsonPrintResult {
+        val steps = PrintSteps(TAG, jobId)
         val img: Bitmap = runCatching {
             val decodedString = Base64.decode(base64Image, Base64.DEFAULT)
             BitmapFactory.decodeStream(ByteArrayInputStream(decodedString))
-        }.getOrNull()?.takeIf { it.width > 0 && it.height > 0 } ?: return EpsonPrintResult.ErrorInvalidImage
+        }.getOrNull()?.takeIf { it.width > 0 && it.height > 0 }
+            ?: return EpsonPrintResult.ErrorInvalidImage.also { steps.log("result", it.name) }
 
         val printerSeries = EpsonModelCapability.printerSeriesByName(deviceData.deviceName)
-        if (printerSeries == EpsonModelCapability.UNKNOWN) return EpsonPrintResult.ErrorUnknown
+        if (printerSeries == EpsonModelCapability.UNKNOWN) {
+            return EpsonPrintResult.ErrorUnknown.also { steps.log("result", "${it.name}, unsupported model") }
+        }
 
         return runCatching {
             val epsonPrinter = EpsPrinter(
@@ -52,11 +60,12 @@ class EpsonPrinter(
                 appContext
             )
 
-            epsonPrinter.connect(deviceData.target, EpsPrinter.PARAM_DEFAULT)
+            epsonPrinter.connectWithTimeout(deviceData.target, steps)
             try {
                 val paperWidthSetting = when {
                     paperWidth != null -> EpsonModelCapability.paperWidthSetting(paperWidth)
-                    EpsonModelCapability.supportsPaperWidthQuery(deviceData.deviceName) -> epsonPrinter.queryPaperWidth()
+                    EpsonModelCapability.supportsPaperWidthQuery(deviceData.deviceName) ->
+                        steps.measure("paper_width") { epsonPrinter.queryPaperWidth() }
                     else -> null
                 }
                 val printableWidth = EpsonModelCapability.printableWidth(printerSeries, paperWidthSetting)
@@ -68,25 +77,27 @@ class EpsonPrinter(
                 // The ePOS SDK has no scaling option, and an image wider than the print area can print nothing.
                 val scaledImg = img.scaledToWidth(printableWidth)
 
-                with(epsonPrinter) {
-                    addImage(
-                        scaledImg, 0, 0,
-                        scaledImg.width,
-                        scaledImg.height,
-                        EpsPrinter.COLOR_1,
-                        EpsPrinter.MODE_MONO,
-                        EpsPrinter.HALFTONE_THRESHOLD,
-                        EpsPrinter.PARAM_DEFAULT.toDouble(),
-                        EpsPrinter.COMPRESS_AUTO
-                    )
+                steps.measure("add_commands") {
+                    with(epsonPrinter) {
+                        addImage(
+                            scaledImg, 0, 0,
+                            scaledImg.width,
+                            scaledImg.height,
+                            EpsPrinter.COLOR_1,
+                            EpsPrinter.MODE_MONO,
+                            EpsPrinter.HALFTONE_THRESHOLD,
+                            EpsPrinter.PARAM_DEFAULT.toDouble(),
+                            EpsPrinter.COMPRESS_AUTO
+                        )
 
-                    addCut(EpsPrinter.CUT_FEED)
-
-                    sendData(EpsPrinter.PARAM_DEFAULT)
-                    setReceiveEventListener(null)
+                        addCut(EpsPrinter.CUT_FEED)
+                    }
                 }
+
+                steps.runWithTimeout("send_data", SEND_DATA_TIMEOUT) { epsonPrinter.sendData(EpsPrinter.PARAM_DEFAULT) }
+                epsonPrinter.setReceiveEventListener(null)
             } finally {
-                epsonPrinter.disconnectSafeWithRetry()
+                epsonPrinter.disconnectSafeWithRetry(steps)
                 epsonPrinter.clearCommandBuffer()
             }
 
@@ -94,25 +105,30 @@ class EpsonPrinter(
         }.fold(
             onSuccess = { it },
             onFailure = { throwable ->
-                when ((throwable as? Epos2Exception)?.errorStatus) {
-                    Epos2Exception.ERR_CONNECT,
-                    Epos2Exception.ERR_TIMEOUT,
-                    Epos2Exception.ERR_NOT_FOUND ->
-                        EpsonPrintResult.ErrorPrinterOffline
+                if (throwable is PrintStepTimeoutException) {
+                    EpsonPrintResult.ErrorTimeout
+                } else {
+                    when ((throwable as? Epos2Exception)?.errorStatus) {
+                        Epos2Exception.ERR_CONNECT,
+                        Epos2Exception.ERR_TIMEOUT,
+                        Epos2Exception.ERR_NOT_FOUND ->
+                            EpsonPrintResult.ErrorPrinterOffline
 
-                    else -> EpsonPrintResult.ErrorUnknown
+                        else -> EpsonPrintResult.ErrorUnknown
+                    }
                 }
             }
-        )
+        ).also { result -> steps.log("result", result.name) }
     }
 
     override suspend fun getStatus(deviceData: PrinterDeviceData.EPSON): PrinterStatus {
         val printerSeries = EpsonModelCapability.printerSeriesByName(deviceData.deviceName)
         require(printerSeries != EpsonModelCapability.UNKNOWN) { "Unsupported Epson model: ${deviceData.deviceName}" }
 
+        val steps = PrintSteps(TAG, jobId = null)
         val epsonPrinter = EpsPrinter(printerSeries, EpsPrinter.LANG_EN, appContext)
         try {
-            epsonPrinter.connect(deviceData.target, EpsPrinter.PARAM_DEFAULT)
+            epsonPrinter.connectWithTimeout(deviceData.target, steps)
         } catch (exception: Epos2Exception) {
             Log.e(TAG, "getStatus: connect failed with status ${exception.errorStatus}")
             throw if (exception.errorStatus == Epos2Exception.ERR_IN_USE) {
@@ -120,15 +136,31 @@ class EpsonPrinter(
             } else {
                 PrinterUnreachableException(exception)
             }
+        } catch (exception: PrintStepTimeoutException) {
+            throw PrinterUnreachableException(exception)
         }
 
         try {
-            val statusInfo = epsonPrinter.status
+            val statusInfo = steps.measure("printer_status") { epsonPrinter.status }
             if (statusInfo.connection != EpsPrinter.TRUE) throw PrinterStatusUnavailableException()
             return statusInfo.toPrinterStatus()
         } finally {
-            runCatching { epsonPrinter.disconnect() }
+            runCatching { steps.runWithTimeout("disconnect", DISCONNECT_TIMEOUT) { epsonPrinter.disconnect() } }
                 .onFailure { throwable -> Log.e(TAG, "getStatus: failed to disconnect $throwable") }
+        }
+    }
+
+    // A connection that opens after its step timed out is not used, so close it at once.
+    private suspend fun EpsPrinter.connectWithTimeout(target: String, steps: PrintSteps) {
+        steps.runWithTimeout(
+            "connect",
+            CONNECT_TIMEOUT,
+            onLateResult = {
+                runCatching { disconnect() }
+                    .onFailure { throwable -> Log.e(TAG, "failed to close connection opened after timeout $throwable") }
+            },
+        ) {
+            connect(target, EpsPrinter.PARAM_DEFAULT)
         }
     }
 
@@ -196,16 +228,17 @@ class EpsonPrinter(
     }
 
     private suspend fun EpsPrinter.disconnectSafeWithRetry(
+        steps: PrintSteps,
         delay: Duration = 500.milliseconds,
         attempts: Int = 5
     ) {
         runCatching {
             delay(delay)
-            this.disconnect()
+            steps.runWithTimeout("disconnect", DISCONNECT_TIMEOUT) { this.disconnect() }
         }.onFailure { throwable ->
             if (throwable is Epos2Exception && throwable.errorStatus == Epos2Exception.ERR_PROCESSING) {
                 if (attempts > 0) {
-                    disconnectSafeWithRetry(delay, attempts - 1)
+                    disconnectSafeWithRetry(steps, delay, attempts - 1)
                 } else {
                     Log.e(TAG, "failed to disconnect $throwable")
                 }
@@ -221,5 +254,11 @@ class EpsonPrinter(
 
         // The SDK calls the listener when its own timeout ends. This limit stops the wait if the call never comes.
         private const val PAPER_WIDTH_CALLBACK_GRACE_MILLISECONDS = 1_000L
+
+        // Hard limits for blocking ePOS SDK calls. They are longer than the SDK defaults (connect 15 s,
+        // sendData 10 s), because a call can block longer than its SDK timeout.
+        private val CONNECT_TIMEOUT = 20.seconds
+        private val SEND_DATA_TIMEOUT = 20.seconds
+        private val DISCONNECT_TIMEOUT = 5.seconds
     }
 }
