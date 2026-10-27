@@ -11,6 +11,7 @@ import type { Manufacturer, PrinterInfo } from "../types/printer";
 type PrinterCardProps = {
   printer: PrinterInfo;
   onPrint: (printer: PrinterInfo) => void;
+  onStatus: (printer: PrinterInfo) => void;
   isPrinting: boolean;
   printerId: string;
 };
@@ -18,6 +19,7 @@ type PrinterCardProps = {
 const PrinterCard: React.FC<PrinterCardProps> = ({
   printer,
   onPrint,
+  onStatus,
   isPrinting,
   printerId,
 }) => {
@@ -116,6 +118,14 @@ const PrinterCard: React.FC<PrinterCardProps> = ({
     <View style={styles.printerCard}>
       <View style={styles.printerHeader}>
         <Text style={styles.printerType}>{printer.type}</Text>
+        <TouchableOpacity
+          style={styles.printButton}
+          onPress={() => onStatus(printer)}
+          accessibilityLabel="Check printer status"
+          accessible={true}
+        >
+          <Text style={styles.printButtonText}>Status</Text>
+        </TouchableOpacity>
         <TouchableOpacity
           style={[styles.printButton, isPrinting && styles.disabledButton]}
           onPress={() => onPrint(printer)}

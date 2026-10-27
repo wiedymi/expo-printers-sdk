@@ -8,4 +8,7 @@ interface Printer<D : PrinterDeviceData, R> {
         deviceData: D,
         paperWidth: PaperWidth?,
     ): R
+
+    // Throws PrinterUnreachableException, PrinterBusyException or PrinterStatusUnavailableException.
+    suspend fun getStatus(deviceData: D): PrinterStatus
 }

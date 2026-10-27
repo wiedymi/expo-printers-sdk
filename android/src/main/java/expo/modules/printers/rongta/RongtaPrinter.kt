@@ -12,8 +12,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.hardware.usb.UsbManager
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.util.Base64
 import android.util.Log
 import androidx.core.content.ContextCompat
@@ -21,25 +19,40 @@ import com.rt.printerlibrary.bean.BluetoothEdrConfigBean
 import com.rt.printerlibrary.bean.UsbConfigBean
 import com.rt.printerlibrary.bean.WiFiConfigBean
 import com.rt.printerlibrary.cmd.EscFactory
+import com.rt.printerlibrary.connect.PrinterInterface
 import com.rt.printerlibrary.enumerate.BmpPrintMode
 import com.rt.printerlibrary.enumerate.CommonEnum
 import com.rt.printerlibrary.enumerate.ConnectStateEnum
+import com.rt.printerlibrary.enumerate.PrinterAskStatusEnum
 import com.rt.printerlibrary.factory.connect.BluetoothFactory
 import com.rt.printerlibrary.factory.connect.UsbFactory
 import com.rt.printerlibrary.factory.connect.WiFiFactory
 import com.rt.printerlibrary.factory.printer.ThermalPrinterFactory
+import com.rt.printerlibrary.observer.PrinterObserver
+import com.rt.printerlibrary.observer.PrinterObserverManager
 import com.rt.printerlibrary.setting.BitmapSetting
 import com.rt.printerlibrary.setting.CommonSetting
 import com.rt.printerlibrary.utils.ConnectListener
+import expo.modules.printers.commons.PaperStatus
 import expo.modules.printers.commons.PaperWidth
 import expo.modules.printers.commons.Printer
 import expo.modules.printers.commons.PrinterDeviceData
+import expo.modules.printers.commons.PrinterError
+import expo.modules.printers.commons.PrinterStatus
+import expo.modules.printers.commons.PrinterStatusUnavailableException
+import expo.modules.printers.commons.PrinterUnreachableException
 import expo.modules.printers.rongta.bluetooth.getBluetoothAdapter
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 internal typealias PrinterConfigBean = Any
@@ -54,7 +67,6 @@ class RongtaPrinter(
 ) : Printer<PrinterDeviceData.Rongta, RongtaPrintResult> {
     private val printerFactory = ThermalPrinterFactory()
     private val printer = printerFactory.create()
-    private val handler: Handler = Handler(Looper.getMainLooper())
     private val printMutex = Mutex()
 
     override suspend fun printImage(
@@ -63,6 +75,7 @@ class RongtaPrinter(
         paperWidth: PaperWidth?,
     ): RongtaPrintResult = printMutex.withLock {
         return@withLock sendPrintJob(base64Image, deviceData, paperWidth)
+            .also { result -> Log.i(TAG, "sendPrintJob: Print job finished with result: $result") }
     }
 
     private suspend fun sendPrintJob(
@@ -85,99 +98,149 @@ class RongtaPrinter(
         }.getOrNull() ?: return RongtaPrintResult.ErrorInvalidImage.also {
             Log.e(TAG, "failed to decode image")
         }
-        Log.i(TAG, "sendPrintJob: Image decoded, starting print coroutine with ${CONNECTION_TIMEOUT.inWholeSeconds}s timeout")
-        val result = suspendCancellableCoroutine { continuation ->
-            val isCompleted = java.util.concurrent.atomic.AtomicBoolean(false)
-            var connectionTimeoutRunnable: Runnable? = null
+        Log.i(TAG, "sendPrintJob: Image decoded, connecting with ${CONNECTION_TIMEOUT.inWholeSeconds}s timeout")
+        try {
+            val connectResult = connect(configBean, CONNECTION_TIMEOUT)
+            if (connectResult != RongtaPrintResult.Success) return connectResult
 
-            fun completeOnce(result: RongtaPrintResult) {
-                if (isCompleted.compareAndSet(false, true)) {
-                    // Cancel connection timeout if still pending
-                    connectionTimeoutRunnable?.let { handler.removeCallbacks(it) }
-                    printer.setPrintListener(null)
-                    printer.setConnectListener(null)
-                    if (printer.connectState == ConnectStateEnum.Connected) {
-                        runCatching { printer.disConnect() }
-                            .onFailure { throwable ->
-                                Log.e(TAG, "failed to disconnect printer - $throwable")
-                            }
+            val printingCommand = createImagePrintCommand(img, paperWidth)
+                ?: return RongtaPrintResult.ErrorUnknown.also { Log.e(TAG, "failed to create printing command") }
+            Log.i(TAG, "printing receipt, command size: ${printingCommand.size}")
+            runCatching { printer.writeMsg(printingCommand) }.onFailure { throwable ->
+                Log.e(TAG, "failed to print receipt - $throwable")
+                return RongtaPrintResult.ErrorPrint
+            }
+            Log.i(TAG, "printer.writeMsg called successfully")
+
+            delay(PRINT_POLL_FIRST_DELAY)
+            while (printer.isPrinting) delay(PRINT_POLL_INTERVAL)
+            Log.i(TAG, "Polling detected print job is finished.")
+            return RongtaPrintResult.Success
+        } finally {
+            disconnect()
+        }
+    }
+
+    override suspend fun getStatus(deviceData: PrinterDeviceData.Rongta): PrinterStatus = printMutex.withLock {
+        val configBean = when (val configResult = configurePrinter(deviceData)) {
+            is ConfigurationResult.Success -> configResult.configBean
+            is ConfigurationResult.Failure -> throw PrinterUnreachableException()
+        }
+        try {
+            if (connect(configBean, STATUS_CONNECTION_TIMEOUT) != RongtaPrintResult.Success) {
+                throw PrinterUnreachableException()
+            }
+            val reply = requestRealTimeStatus() ?: throw PrinterStatusUnavailableException()
+            reply.toPrinterStatus()
+        } finally {
+            disconnect()
+        }
+    }
+
+    // Returns Success when the printer is connected, ErrorConnection or ErrorTimeout otherwise.
+    private suspend fun connect(configBean: PrinterConfigBean, timeout: Duration): RongtaPrintResult =
+        withTimeoutOrNull(timeout) {
+            suspendCancellableCoroutine { continuation ->
+                val isCompleted = AtomicBoolean(false)
+                fun completeOnce(result: RongtaPrintResult) {
+                    if (isCompleted.compareAndSet(false, true)) continuation.resume(result)
+                }
+
+                printer.setConnectListener(object : ConnectListener {
+                    override fun onPrinterConnected(configObj: Any?) {
+                        Log.i(TAG, "onPrinterConnected: $configObj, connectState: ${printer.connectState}, thread: ${Thread.currentThread().name}")
+                        completeOnce(RongtaPrintResult.Success)
                     }
-                    Log.i(TAG, "sendPrintJob: Completing print job with result: $result")
-                    continuation.resumeWith(Result.success(result))
+
+                    override fun onPrinterDisconnect(configObj: Any?) {
+                        Log.i(TAG, "onPrinterDisconnect: $configObj, connectState: ${printer.connectState}")
+                    }
+
+                    override fun onPrinterWritecompletion(configObj: Any?) {
+                        Log.i(TAG, "onPrinterWritecompletion: $configObj, connectState: ${printer.connectState}, thread: ${Thread.currentThread().name}")
+                    }
+                })
+                Log.i(TAG, "About to call printer.connect(configBean) on thread: ${Thread.currentThread().name}")
+                runCatching { printer.connect(configBean) }.onFailure { throwable ->
+                    Log.e(TAG, "Exception during printer.connect:  ${throwable.message}", throwable)
+                    completeOnce(RongtaPrintResult.ErrorConnection)
                 }
             }
+        } ?: RongtaPrintResult.ErrorTimeout.also {
+            Log.e(TAG, "CONNECTION TIMEOUT: onPrinterConnected never fired after ${timeout.inWholeSeconds}s")
+        }
 
-            // Schedule connection timeout
-            connectionTimeoutRunnable = Runnable {
-                Log.e(TAG, "CONNECTION TIMEOUT: onPrinterConnected never fired after ${CONNECTION_TIMEOUT.inWholeSeconds}s")
-                completeOnce(RongtaPrintResult.ErrorTimeout)
-            }
-            handler.postDelayed(connectionTimeoutRunnable!!, CONNECTION_TIMEOUT.inWholeMilliseconds)
+    private fun disconnect() {
+        printer.setPrintListener(null)
+        printer.setConnectListener(null)
+        if (printer.connectState == ConnectStateEnum.Connected) {
+            runCatching { printer.disConnect() }
+                .onFailure { throwable -> Log.e(TAG, "failed to disconnect printer - $throwable") }
+        }
+    }
 
-            printer.setConnectListener(object : ConnectListener {
-                override fun onPrinterConnected(configObj: Any?) {
-                    // Cancel connection timeout since we connected successfully
-                    connectionTimeoutRunnable?.let { handler.removeCallbacks(it) }
-                    Log.i(TAG, "onPrinterConnected: $configObj, connectState: ${printer.connectState}, thread: ${Thread.currentThread().name}")
-                    val printingCommand = createImagePrintCommand(img, paperWidth)
-                    if (printingCommand == null) {
-                        Log.e(TAG, "failed to create printing command")
-                        completeOnce(RongtaPrintResult.ErrorUnknown)
-                    } else {
-                        Log.i(TAG, "printing receipt, command size: ${printingCommand.size}")
-                        runCatching {
-                            printer.writeMsg(printingCommand)
-                            Log.i(TAG, "printer.writeMsg called successfully")
+    // Sends the ESC/POS real-time status requests DLE EOT 1-4. Returns one reply byte per request,
+    // or null if the printer does not send valid replies in time.
+    private suspend fun requestRealTimeStatus(): ByteArray? {
+        val received = ByteArrayOutputStream()
+        val observerManager = PrinterObserverManager.getInstance()
+        var replyObserver: PrinterObserver? = null
+        try {
+            val reply = withTimeoutOrNull(STATUS_REPLY_TIMEOUT) {
+                suspendCancellableCoroutine<ByteArray?> { continuation ->
+                    replyObserver = object : PrinterObserver {
+                        override fun printerObserverCallback(printerInterface: PrinterInterface<*>?, state: Int) = Unit
 
-                            fun pollPrintCompletion() {
-                                if (!printer.isPrinting) {
-                                    Log.i(TAG, "Polling detected print job is finished.")
-                                    completeOnce(RongtaPrintResult.Success)
-                                } else {
-                                    handler.postDelayed({ pollPrintCompletion() }, 500)
+                        override fun printerReadMsgCallback(printerInterface: PrinterInterface<*>?, bytes: ByteArray?) {
+                            if (bytes == null) return
+                            synchronized(received) {
+                                received.write(bytes)
+                                if (received.size() >= STATUS_REQUESTS.size && continuation.isActive) {
+                                    continuation.resume(received.toByteArray().copyOf(STATUS_REQUESTS.size))
                                 }
                             }
-                            handler.postDelayed({ pollPrintCompletion() }, 2000)
-                            Log.i(TAG, "pollPrintCompletion called")
-                        }.onFailure { throwable ->
-                            Log.e(TAG, "failed to print receipt - $throwable")
-                            completeOnce(RongtaPrintResult.ErrorPrint)
                         }
+                    }.also(observerManager::add)
+                    printer.setAlwaysReadInputStream(true)
+
+                    val cmd = EscFactory().create()
+                    runCatching {
+                        printer.writeMsg(STATUS_REQUESTS.map(cmd::getPrinterStatus).reduce { all, request -> all + request })
+                    }.onFailure { throwable ->
+                        Log.e(TAG, "failed to send status request - $throwable")
+                        synchronized(received) { if (continuation.isActive) continuation.resume(null) }
                     }
                 }
-                override fun onPrinterDisconnect(configObj: Any?) {
-                    Log.i(TAG, "onPrinterDisconnect: $configObj, connectState: ${printer.connectState}, thread: ${printer.connectState}")
-                }
-                
-                override fun onPrinterWritecompletion(configObj: Any?) {
-                    Log.i(TAG, "onPrinterWritecompletion: $configObj, connectState: ${printer.connectState}, thread: ${Thread.currentThread().name}")
-                
-                }
-            })
-            Log.i(TAG, "About to call printer.connect(configBean) on thread: ${Thread.currentThread().name}")
-            runCatching {
-                printer.connect(configBean)
-                Log.i(TAG, "printer.connect(configBean) called successfully")
-            }.onFailure { throwable ->
-                Log.e(TAG, "Exception during printer.connect:  ${throwable.message}", throwable)
-                completeOnce(RongtaPrintResult.ErrorConnection)
             }
-            continuation.invokeOnCancellation {
-                Log.i(TAG, "canceling printing - connection state ${printer.connectState}")
-                // Cancel connection timeout on cancellation
-                connectionTimeoutRunnable?.let { handler.removeCallbacks(it) }
-                if (printer.connectState == ConnectStateEnum.Connected) {
-                    runCatching { printer.disConnect() }
-                        .onFailure { throwable ->
-                            Log.e(TAG, "failed to disconnect printer - $throwable")
-                        }
-                        .getOrNull()
-                }
-            }
+            Log.i(TAG, "status reply: ${synchronized(received) { received.toByteArray() }.toHex()}")
+            // Every real-time status byte has bit 1 and bit 4 on, and bit 0 and bit 7 off.
+            return reply?.takeIf { bytes -> bytes.all { (it.toInt() and 0x93) == 0x12 } }
+        } finally {
+            replyObserver?.let(observerManager::remove)
+            printer.setAlwaysReadInputStream(false)
         }
-        Log.i(TAG, "sendPrintJob: Print coroutine finished with result: $result")
-        return result
     }
+
+    // Bits from the ESC/POS DLE EOT specification.
+    private fun ByteArray.toPrinterStatus(): PrinterStatus {
+        val (printerStatus, offlineCause, errorCause, paperSensor) = map { it.toInt() and 0xFF }
+        return PrinterStatus(
+            online = (printerStatus and 0x08) == 0,
+            coverOpen = (offlineCause and 0x04) != 0,
+            paper = when {
+                (paperSensor and 0x60) != 0 || (offlineCause and 0x20) != 0 -> PaperStatus.EMPTY
+                (paperSensor and 0x0C) != 0 -> PaperStatus.NEAR_END
+                else -> PaperStatus.OK
+            },
+            errors = buildList {
+                if ((errorCause and 0x08) != 0) add(PrinterError.CUTTER_ERROR)
+                if ((errorCause and 0x20) != 0) add(PrinterError.UNRECOVERABLE_ERROR)
+                if ((errorCause and 0x40) != 0) add(PrinterError.AUTO_RECOVERABLE_ERROR)
+            },
+        )
+    }
+
+    private fun ByteArray.toHex(): String = joinToString(" ") { "%02X".format(it) }
 
     private fun createImagePrintCommand(image: Bitmap, paperWidth: PaperWidth?): ByteArray? {
         val cmdFactory = EscFactory()
@@ -405,5 +468,17 @@ class RongtaPrinter(
         private const val PRINTABLE_WIDTH_58_MM = 384
         private const val PRINTABLE_WIDTH_80_MM = 576
         private val CONNECTION_TIMEOUT = 30.seconds
+        private val PRINT_POLL_FIRST_DELAY = 2.seconds
+        private val PRINT_POLL_INTERVAL = 500.milliseconds
+        private val STATUS_CONNECTION_TIMEOUT = 10.seconds
+        private val STATUS_REPLY_TIMEOUT = 3.seconds
+
+        // DLE EOT 1 to 4: printer status, offline cause, error cause, paper sensor.
+        private val STATUS_REQUESTS = listOf(
+            PrinterAskStatusEnum.Printer_Status,
+            PrinterAskStatusEnum.Offline_status,
+            PrinterAskStatusEnum.Trans_status,
+            PrinterAskStatusEnum.Paper_status,
+        )
     }
 }

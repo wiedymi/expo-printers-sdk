@@ -4,7 +4,11 @@ import type {
   EpsonPrintersModuleEvents,
   EpsonPrinterInfo,
 } from "./EpsonPrinters.types";
-import type { PrinterConnectionType, PrintOptions } from "./commons";
+import type {
+  PrinterConnectionType,
+  PrinterStatus,
+  PrintOptions,
+} from "./commons";
 
 declare class EpsonPrintersModule extends NativeModule<EpsonPrintersModuleEvents> {
   findPrinters(connectionType: PrinterConnectionType): Promise<boolean>;
@@ -22,6 +26,7 @@ declare class EpsonPrintersModule extends NativeModule<EpsonPrintersModuleEvents
     deviceData: EpsonPrinterInfo,
     options?: PrintOptions,
   ): Promise<boolean>;
+  getStatus(deviceData: EpsonPrinterInfo): Promise<PrinterStatus>;
 }
 
 // This call loads the native module object from the JSI.

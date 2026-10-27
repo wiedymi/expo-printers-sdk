@@ -12,6 +12,7 @@ import type {
   RongtaPrintResult,
   StarMicronicsPrintResult,
   PrinterConnectionType,
+  PrinterStatus,
 } from "expo-printers-sdk";
 import type { Manufacturer, PrinterInfo } from "../types/printer";
 import { deduplicatePrinters } from "../utils/printer-utils";
@@ -214,6 +215,24 @@ export const usePrinters = (manufacturer: Manufacturer) => {
     [],
   );
 
+  const getStatus = useCallback(
+    (printer: PrinterInfo): Promise<PrinterStatus> => {
+      switch (printer.type) {
+        case "EPSON":
+          return EpsonPrinters.getStatus(printer.info as EpsonPrinterInfo);
+        case "RONGTA":
+          return RongtaPrinters.getStatus(printer.info as RongtaPrinterInfo);
+        case "STAR":
+          return StarMicronicsPrinters.getStatus(
+            printer.info as StarMicronicsPrinterInfo,
+          );
+        default:
+          throw new Error("Unknown printer type");
+      }
+    },
+    [],
+  );
+
   return {
     printers,
     isSearching,
@@ -222,6 +241,7 @@ export const usePrinters = (manufacturer: Manufacturer) => {
     searchPrinters,
     connectManually,
     printImage,
+    getStatus,
     refreshSupportedModels,
   };
 };
