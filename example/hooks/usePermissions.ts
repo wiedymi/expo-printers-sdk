@@ -21,13 +21,13 @@ export const usePermissions = () => {
         const results = await PermissionsAndroid.requestMultiple(permissions);
 
         const allGranted = Object.values(results).every(
-          (result) => result === PermissionsAndroid.RESULTS.GRANTED
+          (result) => result === PermissionsAndroid.RESULTS.GRANTED,
         );
 
         if (!allGranted) {
           Alert.alert(
             "Permission Required",
-            "Location and Bluetooth permissions are required to search for printers."
+            "Location and Bluetooth permissions are required to search for printers.",
           );
           return false;
         }

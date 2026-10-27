@@ -14,15 +14,15 @@ declare class StarMicronicsPrintersModule extends NativeModule<StarMicronicsPrin
       ipAddress: string;
       port?: number;
       modelName: string;
-    }
+    },
   ): Promise<StarMicronicsPrinterInfo>;
   getSupportedModels(): Promise<string[]>;
   printImage(
     base64Image: string,
-    deviceData: StarMicronicsPrinterInfo
+    deviceData: StarMicronicsPrinterInfo,
   ): Promise<boolean>;
 }
 
 export default requireNativeModule<StarMicronicsPrintersModule>(
-  "StarMicronicsPrintersModule"
+  "StarMicronicsPrintersModule",
 );

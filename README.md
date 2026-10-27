@@ -99,7 +99,7 @@ const requestPermissions = async () => {
 
     const results = await PermissionsAndroid.requestMultiple(permissions);
     return Object.values(results).every(
-      (result) => result === PermissionsAndroid.RESULTS.GRANTED
+      (result) => result === PermissionsAndroid.RESULTS.GRANTED,
     );
   }
   return true;
@@ -164,6 +164,7 @@ const starPrinter = await StarMicronicsPrinters.connectManually("Network", {
 ```
 
 **When to use manual connection:**
+
 - You know the printer's IP address and port
 - The printer is on a different subnet
 - The printer doesn't respond to network discovery
@@ -208,7 +209,7 @@ const printImage = async (printer: EpsonPrinterInfo, imageUrl: string) => {
           Alert.alert("Error", result.error || "Print failed");
         }
         printListener.remove();
-      }
+      },
     );
 
     // Fetch and convert image
@@ -448,11 +449,13 @@ try {
 ### Rongta Network Discovery
 
 Rongta network discovery requires:
+
 - Device and printer on the **same subnet** (e.g., both on 192.168.1.x)
 - WiFi **multicast** enabled (automatically handled by SDK)
 - Printer must respond to UDP broadcast on port 1460
 
 **If auto-discovery doesn't work:**
+
 1. Use `connectManually()` with the printer's IP address
 2. Verify printer is network-accessible: `ping <printer-ip>`
 3. Check printer port: `telnet <printer-ip> 9100`
@@ -517,12 +520,14 @@ bun run android
 ## Version History
 
 ### v0.9.5
+
 - Added manual network connection API
 - Fixed Rongta network scanner
 - Improved error handling
 - Redesigned example app UI
 
 ### Previous Versions
+
 - Enhanced Error Handling - Comprehensive error messages and recovery
 - Image Fetching - Built-in URL to base64 conversion
 - Type Safety - Full TypeScript support with strict typing

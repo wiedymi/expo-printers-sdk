@@ -17,9 +17,7 @@ import type { Manufacturer, PrinterInfo } from "../types/printer";
 import { deduplicatePrinters } from "../utils/printer-utils";
 
 type PrinterModule =
-  | typeof EpsonPrinters
-  | typeof RongtaPrinters
-  | typeof StarMicronicsPrinters;
+  typeof EpsonPrinters | typeof RongtaPrinters | typeof StarMicronicsPrinters;
 
 export const usePrinters = (manufacturer: Manufacturer) => {
   const [printers, setPrinters] = useState<PrinterInfo[]>([]);
@@ -36,7 +34,9 @@ export const usePrinters = (manufacturer: Manufacturer) => {
 
   const handlePrintersFound = useCallback(
     (data: { printers: any[] }) => {
-      console.log(`[Event] onPrintersFound: ${data.printers.length} printer(s)`);
+      console.log(
+        `[Event] onPrintersFound: ${data.printers.length} printer(s)`,
+      );
       data.printers.forEach((p, i) => {
         console.log(`[Event]   [${i}] ${JSON.stringify(p)}`);
       });
@@ -47,19 +47,23 @@ export const usePrinters = (manufacturer: Manufacturer) => {
             type: manufacturer,
             info: printer,
           })),
-        ])
+        ]),
       );
       setIsSearching(false);
     },
-    [manufacturer]
+    [manufacturer],
   );
 
   const handlePrintResult = useCallback(
-    (result: EpsonPrintResult | RongtaPrintResult | StarMicronicsPrintResult) => {
+    (
+      result: EpsonPrintResult | RongtaPrintResult | StarMicronicsPrintResult,
+    ) => {
       if (result.success) {
         console.log("[Event] onPrintImage: SUCCESS");
       } else {
-        console.error(`[Event] onPrintImage: FAILED - ${result.error || "Unknown error"}`);
+        console.error(
+          `[Event] onPrintImage: FAILED - ${result.error || "Unknown error"}`,
+        );
       }
       setPrintingStates((prev) => {
         const newState = { ...prev };
@@ -70,7 +74,7 @@ export const usePrinters = (manufacturer: Manufacturer) => {
       });
       return result;
     },
-    []
+    [],
   );
 
   const getPrinterModule = (mfr: Manufacturer): PrinterModule => {
@@ -109,7 +113,7 @@ export const usePrinters = (manufacturer: Manufacturer) => {
         return;
       }
     },
-    [manufacturer, modelsCacheRef]
+    [manufacturer, modelsCacheRef],
   );
 
   useEffect(() => {
@@ -148,7 +152,7 @@ export const usePrinters = (manufacturer: Manufacturer) => {
         throw error;
       }
     },
-    [manufacturer]
+    [manufacturer],
   );
 
   const connectManually = useCallback(
@@ -165,20 +169,20 @@ export const usePrinters = (manufacturer: Manufacturer) => {
           deduplicatePrinters([
             ...prev,
             { type: manufacturer, info: printerInfo },
-          ])
+          ]),
         );
       }
 
       return printerInfo;
     },
-    [manufacturer]
+    [manufacturer],
   );
 
   const printImage = useCallback(
     async (
       base64Image: string,
       printer: PrinterInfo,
-      printerId: string
+      printerId: string,
     ): Promise<boolean> => {
       setPrintingStates((prev) => ({ ...prev, [printerId]: true }));
 
@@ -187,17 +191,17 @@ export const usePrinters = (manufacturer: Manufacturer) => {
           case "EPSON":
             return await EpsonPrinters.printImage(
               base64Image,
-              printer.info as EpsonPrinterInfo
+              printer.info as EpsonPrinterInfo,
             );
           case "RONGTA":
             return await RongtaPrinters.printImage(
               base64Image,
-              printer.info as RongtaPrinterInfo
+              printer.info as RongtaPrinterInfo,
             );
           case "STAR":
             return await StarMicronicsPrinters.printImage(
               base64Image,
-              printer.info as StarMicronicsPrinterInfo
+              printer.info as StarMicronicsPrinterInfo,
             );
           default:
             throw new Error("Unknown printer type");
@@ -207,7 +211,7 @@ export const usePrinters = (manufacturer: Manufacturer) => {
         throw error;
       }
     },
-    []
+    [],
   );
 
   return {

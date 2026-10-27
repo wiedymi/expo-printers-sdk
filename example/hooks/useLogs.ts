@@ -13,42 +13,39 @@ export function useLogs() {
     error: typeof console.error;
   } | null>(null);
 
-  const addLog = useCallback(
-    (level: LogEntry["level"], ...args: unknown[]) => {
-      const message = args
-        .map((arg) => {
-          if (typeof arg === "object") {
-            try {
-              return JSON.stringify(arg, null, 0);
-            } catch {
-              return String(arg);
-            }
+  const addLog = useCallback((level: LogEntry["level"], ...args: unknown[]) => {
+    const message = args
+      .map((arg) => {
+        if (typeof arg === "object") {
+          try {
+            return JSON.stringify(arg, null, 0);
+          } catch {
+            return String(arg);
           }
-          return String(arg);
-        })
-        .join(" ");
-
-      const now = new Date();
-      const timestamp = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")}.${now.getMilliseconds().toString().padStart(3, "0")}`;
-
-      const entry: LogEntry = {
-        id: logIdRef.current++,
-        timestamp,
-        level,
-        message,
-      };
-
-      setLogs((prev) => {
-        const newLogs = [...prev, entry];
-        // Keep only last MAX_LOGS entries
-        if (newLogs.length > MAX_LOGS) {
-          return newLogs.slice(-MAX_LOGS);
         }
-        return newLogs;
-      });
-    },
-    []
-  );
+        return String(arg);
+      })
+      .join(" ");
+
+    const now = new Date();
+    const timestamp = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")}.${now.getMilliseconds().toString().padStart(3, "0")}`;
+
+    const entry: LogEntry = {
+      id: logIdRef.current++,
+      timestamp,
+      level,
+      message,
+    };
+
+    setLogs((prev) => {
+      const newLogs = [...prev, entry];
+      // Keep only last MAX_LOGS entries
+      if (newLogs.length > MAX_LOGS) {
+        return newLogs.slice(-MAX_LOGS);
+      }
+      return newLogs;
+    });
+  }, []);
 
   const clearLogs = useCallback(() => {
     setLogs([]);

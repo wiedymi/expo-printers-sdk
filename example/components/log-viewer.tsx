@@ -65,9 +65,7 @@ export default function LogViewer({
           logs.map((log) => (
             <View key={log.id} style={styles.logEntry}>
               <Text style={styles.timestamp}>{log.timestamp}</Text>
-              <Text
-                style={[styles.level, { color: LOG_COLORS[log.level] }]}
-              >
+              <Text style={[styles.level, { color: LOG_COLORS[log.level] }]}>
                 [{log.level.toUpperCase()}]
               </Text>
               <Text style={[styles.message, { color: LOG_COLORS[log.level] }]}>
