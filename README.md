@@ -534,47 +534,18 @@ Rongta network discovery requires:
 - Ensure image file size is reasonable
 - Test with simple black and white images first
 
-## Recent Updates
+## Changelog
 
-### v0.9.8 (Latest)
-
-- **Star Printer Reliability**
-  - Fixed network connection and print-completion timeouts
-  - Fixed manual Star network port names
-  - Added stable `errorCode` values for connection, status, and hardware failures
-  - Ensured printer ports are released after failed print attempts
-
-### v0.9.5
-
-- **Manual Network Connection** - Connect directly to printers by IP/port
-  - `connectManually(ipAddress, port)` method for all printer types
-  - Bypass network discovery for known printers
-  - Support for different subnets
-
-- **Improved Network Discovery**
-  - Fixed Rongta network scanner startup issue
-  - Added multicast lock support for UDP broadcasts
-  - Enhanced logging and debugging capabilities
-
-- **Enhanced Reliability**
-  - Safer connection state checks
-  - Better error handling for edge cases
-  - Fixed crashes during print configuration
-
-- **Improved Example App**
-  - Compact, modern UI design
-  - Integrated auto-discovery and manual connection
-  - Better UX with mode toggles
-  - Simplified error messages
+See [CHANGELOG.md](CHANGELOG.md).
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+Contributions are welcome. Open an issue or a pull request.
 
 ### Development Setup
 
 ```bash
-git clone https://github.com/your-org/expo-printers-sdk.git
+git clone https://github.com/wiedymi/expo-printers-sdk.git
 cd expo-printers-sdk
 bun install
 
@@ -584,22 +555,11 @@ bun install
 bun run android
 ```
 
-## Version History
+## License
 
-### v0.9.5
+The source code is licensed under the [MIT License](LICENSE).
 
-- Added manual network connection API
-- Fixed Rongta network scanner
-- Improved error handling
-- Redesigned example app UI
-
-### Previous Versions
-
-- Enhanced Error Handling - Comprehensive error messages and recovery
-- Image Fetching - Built-in URL to base64 conversion
-- Type Safety - Full TypeScript support with strict typing
-- Production Ready - Extensive testing and validation
-- Modern Example - Complete demo app with best practices
+This package also contains the Epson ePOS SDK, the Rongta printer library and android-serialport-api, and the app build downloads the Star Micronics SDK. These components keep their own licenses. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ---
 
