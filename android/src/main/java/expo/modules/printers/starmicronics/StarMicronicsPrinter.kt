@@ -121,6 +121,12 @@ class StarMicronicsPrinter(
             if (overTemp) add(PrinterError.OVER_TEMPERATURE)
             if (voltageError) add(PrinterError.VOLTAGE_ERROR)
             if (unrecoverableError) add(PrinterError.UNRECOVERABLE_ERROR)
+            if (
+                pageModeCmdError || paperDetectionError || blackMarkError ||
+                headUpError || rollPositionError || receiveBufferOverflow
+            ) {
+                add(PrinterError.UNKNOWN_ERROR)
+            }
         },
     )
 

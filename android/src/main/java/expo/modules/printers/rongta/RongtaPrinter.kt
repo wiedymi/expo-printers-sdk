@@ -238,6 +238,8 @@ class RongtaPrinter(
                 if ((errorCause and 0x08) != 0) add(PrinterError.CUTTER_ERROR)
                 if ((errorCause and 0x20) != 0) add(PrinterError.UNRECOVERABLE_ERROR)
                 if ((errorCause and 0x40) != 0) add(PrinterError.AUTO_RECOVERABLE_ERROR)
+                // The offline cause reports an error, but the error cause gives no kind.
+                if (isEmpty() && (offlineCause and 0x40) != 0) add(PrinterError.UNKNOWN_ERROR)
             },
         )
     }

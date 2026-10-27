@@ -17,7 +17,8 @@ export type PrinterError =
   | "OVER_TEMPERATURE"
   | "VOLTAGE_ERROR"
   | "AUTO_RECOVERABLE_ERROR"
-  | "UNRECOVERABLE_ERROR";
+  | "UNRECOVERABLE_ERROR"
+  | "UNKNOWN_ERROR"; // The printer reports an error, but not which kind.
 
 export type PrinterStatus = {
   // The printer reports that it is ready to print.

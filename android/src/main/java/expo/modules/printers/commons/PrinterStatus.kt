@@ -17,6 +17,9 @@ enum class PrinterError {
     VOLTAGE_ERROR,
     AUTO_RECOVERABLE_ERROR,
     UNRECOVERABLE_ERROR,
+
+    // The printer reports an error, but not which kind.
+    UNKNOWN_ERROR,
 }
 
 data class PrinterStatus(

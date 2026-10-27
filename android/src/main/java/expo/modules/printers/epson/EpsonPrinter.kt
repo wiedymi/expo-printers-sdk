@@ -154,7 +154,8 @@ class EpsonPrinter(
                     EpsPrinter.COVER_OPEN -> null
                     else -> PrinterError.AUTO_RECOVERABLE_ERROR
                 }
-                else -> null
+                EpsPrinter.NO_ERR, EpsPrinter.UNKNOWN -> null
+                else -> PrinterError.UNKNOWN_ERROR
             }
         ),
     )
