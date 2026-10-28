@@ -39,7 +39,7 @@ export default function LogViewer({
   onClear,
   maxHeight = 200,
 }: LogViewerProps) {
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
 
   useEffect(() => {
     // Auto-scroll to bottom when new logs arrive
