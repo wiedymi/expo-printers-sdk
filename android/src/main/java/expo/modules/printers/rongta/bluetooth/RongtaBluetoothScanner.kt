@@ -9,7 +9,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.util.Log
+import expo.modules.printers.commons.PrinterLog
 import androidx.annotation.RequiresPermission
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
@@ -36,7 +36,7 @@ class RongtaBluetoothScanner(
     @SuppressLint("MissingPermission")
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     fun scan(): Flow<BluetoothDevice> {
-        Log.i(TAG, "started: bluetoothAdapter available - ${bluetoothAdapter != null}")
+        PrinterLog.i(TAG, "started: bluetoothAdapter available - ${bluetoothAdapter != null}")
         return callbackFlow {
             val pairedDevices = runCatching { bluetoothAdapter?.bondedDevices }.getOrNull()
                 ?.filter { device ->
@@ -45,14 +45,14 @@ class RongtaBluetoothScanner(
                 }
                 .orEmpty()
 
-            Log.i(TAG, "already paired devices: $pairedDevices")
+            PrinterLog.i(TAG, "already paired devices: $pairedDevices")
 
             pairedDevices.forEach { send(it) }
 
             val bluetoothDeviceReceiver = object : BroadcastReceiver() {
                 override fun onReceive(context: Context?, intent: Intent?) {
                     val action = intent?.action
-                    Log.i(TAG, "bluetoothDeviceReceiver action - $action")
+                    PrinterLog.i(TAG, "bluetoothDeviceReceiver action - $action")
                     if (BluetoothDevice.ACTION_FOUND == action) {
                         val device =
                             intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
@@ -60,52 +60,52 @@ class RongtaBluetoothScanner(
                         val deviceType = device.bluetoothClass.majorDeviceClass
                         if (deviceType != BluetoothClass.Device.Major.IMAGING) return
 
-                        Log.i(TAG, "found device - $device")
+                        PrinterLog.i(TAG, "found device - $device")
                         trySend(device)
                     } else if (BluetoothAdapter.ACTION_DISCOVERY_FINISHED == action) {
-                        Log.i(TAG, "discovery finished")
+                        PrinterLog.i(TAG, "discovery finished")
                         if (this@callbackFlow.isActive) close()
                     }
                 }
             }
 
             runCatching {
-                Log.i(TAG, "registering bluetoothDeviceReceiver")
+                PrinterLog.i(TAG, "registering bluetoothDeviceReceiver")
                 appContext.registerReceiver(bluetoothDeviceReceiver, btIntentFilter)
             }
                 .onFailure { throwable ->
-                    Log.e(TAG, "failed to register bluetoothDeviceReceiver: $throwable")
+                    PrinterLog.e(TAG, "failed to register bluetoothDeviceReceiver: $throwable")
                     close(throwable)
                     return@callbackFlow
                 }
 
             runCatching {
-                Log.i(TAG, "starting discovery")
+                PrinterLog.i(TAG, "starting discovery")
                 bluetoothAdapter?.startDiscovery()
             }
                 .onFailure { throwable ->
-                    Log.e(TAG, "failed to start discovery: $throwable")
+                    PrinterLog.e(TAG, "failed to start discovery: $throwable")
                     close(throwable)
                     return@callbackFlow
                 }
 
             delay(30.seconds)
-            Log.i(TAG, "discovery finished after 10 seconds timeout")
+            PrinterLog.i(TAG, "discovery finished after 10 seconds timeout")
             close()
 
             awaitClose {
-                Log.i(TAG, "closing bluetooth scanner")
+                PrinterLog.i(TAG, "closing bluetooth scanner")
                 runCatching {
-                    Log.i(TAG, "unregistering bluetoothDeviceReceiver")
+                    PrinterLog.i(TAG, "unregistering bluetoothDeviceReceiver")
                     appContext.unregisterReceiver(bluetoothDeviceReceiver)
                 }
                     .onFailure { throwable ->
-                        Log.e(TAG, "failed to unregister bluetoothDeviceReceiver: $throwable")
+                        PrinterLog.e(TAG, "failed to unregister bluetoothDeviceReceiver: $throwable")
                     }
 
                 runCatching { bluetoothAdapter?.cancelDiscovery() }
                     .onFailure { throwable ->
-                        Log.e(TAG, "failed to cancel discovery: $throwable")
+                        PrinterLog.e(TAG, "failed to cancel discovery: $throwable")
                     }
             }
         }

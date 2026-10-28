@@ -1,7 +1,7 @@
 package expo.modules.printers.epson
 
 import android.content.Context
-import android.util.Log
+import expo.modules.printers.commons.PrinterLog
 import expo.modules.printers.commons.PrinterConnectionType
 import expo.modules.printers.commons.PrinterDeviceData
 import expo.modules.printers.commons.PrinterFinder
@@ -26,7 +26,7 @@ class EpsonPrinterFinder(
 
     private fun searchPrinters(connectionType: PrinterConnectionType): Flow<PrinterDeviceData.EPSON> {
         return callbackFlow {
-            Log.i(TAG, "searching for printers with connection type: $connectionType")
+            PrinterLog.i(TAG, "searching for printers with connection type: $connectionType")
             runCatching {
                 Discovery.start(appContext, connectionType.toFilterOption()) { deviceInfo ->
                     val deviceData = PrinterDeviceData.EPSON(
@@ -44,15 +44,15 @@ class EpsonPrinterFinder(
                 delay(30.seconds) // Wait for a while to receive devices
                 close()
             }.onFailure { throwable ->
-                Log.e(TAG, "Failed to start discovery: $throwable")
+                PrinterLog.e(TAG, "Failed to start discovery: $throwable")
             }
 
             awaitClose {
-                Log.i(TAG, "Stopping discovery")
+                PrinterLog.i(TAG, "Stopping discovery")
                 runCatching {
                     Discovery.stop()
                 }.onFailure { throwable ->
-                    Log.e(TAG, "Failed to stop discovery: $throwable")
+                    PrinterLog.e(TAG, "Failed to stop discovery: $throwable")
                 }
             }
         }

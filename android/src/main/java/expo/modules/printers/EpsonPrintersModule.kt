@@ -1,12 +1,14 @@
 package expo.modules.printers
 
 import android.content.Context
-import android.util.Log
+import expo.modules.printers.commons.PrinterLog
 import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.printers.commons.NetworkValidator
 import expo.modules.printers.commons.PrintOptions
+import expo.modules.printers.commons.printNotStartedEvent
+import expo.modules.printers.commons.toPrintImageEvent
 import expo.modules.printers.commons.PrinterConnectionType
 import expo.modules.printers.commons.PrinterDeviceData
 import expo.modules.printers.commons.safeGetInt
@@ -16,7 +18,6 @@ import expo.modules.printers.commons.safeGetStringOrDefault
 import expo.modules.printers.commons.toPrinterConnectionType
 import expo.modules.printers.epson.EpsonPrinter
 import expo.modules.printers.epson.EpsonPrinterFinder
-import expo.modules.printers.epson.EpsonPrintResult
 import expo.modules.printers.epson.internals.EpsonModelCapability
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,6 +26,7 @@ import kotlinx.coroutines.withContext
 
 class EpsonPrintersModule : Module() {
     private val TAG = "EpsonPrintersModule"
+    private val logSink = PrinterLog.Sink("Epson") { entry -> sendEvent("onLog", entry) }
     private var printer: EpsonPrinter? = null
     private var printerFinder: EpsonPrinterFinder? = null
     private val coroutineScope = CoroutineScope(Dispatchers.Main)
@@ -35,14 +37,16 @@ class EpsonPrintersModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("EpsonPrintersModule")
 
-        Events("onPrintersFound", "onPrintImage")
+        Events("onPrintersFound", "onPrintImage", "onLog")
 
         OnCreate {
+            PrinterLog.addSink(logSink)
             printer = EpsonPrinter(context)
             printerFinder = EpsonPrinterFinder(context)
         }
 
         OnDestroy {
+            PrinterLog.removeSink(logSink)
             printer = null
             printerFinder = null
         }
@@ -64,7 +68,7 @@ class EpsonPrintersModule : Module() {
 
             when (val validation = NetworkValidator.validateNetworkConnection(ipAddress, printerPort)) {
                 is NetworkValidator.ValidationResult.Error -> {
-                    Log.e(TAG, "Invalid network connection parameters: ${validation.message}")
+                    PrinterLog.e(TAG, "Invalid network connection parameters: ${validation.message}")
                     throw IllegalArgumentException(validation.message)
                 }
                 NetworkValidator.ValidationResult.Valid -> {
@@ -90,7 +94,7 @@ class EpsonPrintersModule : Module() {
                 val type = try {
                     connectionType.toPrinterConnectionType()
                 } catch (e: IllegalArgumentException) {
-                    Log.e(TAG, "Invalid connection type: $connectionType", e)
+                    PrinterLog.e(TAG, "Invalid connection type: $connectionType", e)
                     return@AsyncFunction false
                 }
                 coroutineScope.launch(Dispatchers.IO) {
@@ -112,7 +116,7 @@ class EpsonPrintersModule : Module() {
                 }
                 true
             }.onFailure { e ->
-                Log.e(TAG, "Failed to find printers", e)
+                PrinterLog.e(TAG, "Failed to find printers", e)
             }.getOrElse { false }
         }
 
@@ -129,30 +133,17 @@ class EpsonPrintersModule : Module() {
                 val epsonDeviceData = deviceData.toEpsonDeviceData()
 
                 coroutineScope.launch(Dispatchers.IO) {
-                    val result = printer?.printImage(base64Image, epsonDeviceData, options?.paperWidth, options?.jobId)
-                    val success = result == EpsonPrintResult.Success
-
-                    sendEvent("onPrintImage", mapOf(
-                        "jobId" to options?.jobId,
-                        "success" to success,
-                        "error" to when (result) {
-                            EpsonPrintResult.ErrorInvalidImage -> "Invalid image data"
-                            EpsonPrintResult.ErrorPrinterOffline -> "Printer is offline"
-                            EpsonPrintResult.ErrorTimeout -> "Printer did not answer in time"
-                            EpsonPrintResult.ErrorUnknown -> "Unknown error occurred"
-                            EpsonPrintResult.Success -> null
-                            null -> "Printer not initialized"
-                        }
-                    ))
+                    val report = printer?.printImage(base64Image, epsonDeviceData, options?.paperWidth, options?.jobId)
+                    sendEvent(
+                        "onPrintImage",
+                        report?.toPrintImageEvent(options?.jobId)
+                            ?: printNotStartedEvent(options?.jobId, "NOT_INITIALIZED", null),
+                    )
                 }
                 true
             }.onFailure { e ->
-                Log.e(TAG, "Print failed", e)
-                sendEvent("onPrintImage", mapOf(
-                    "jobId" to options?.jobId,
-                    "success" to false,
-                    "error" to (e.localizedMessage ?: "Unknown error during printing")
-                ))
+                PrinterLog.e(TAG, "Print failed", e)
+                sendEvent("onPrintImage", printNotStartedEvent(options?.jobId, "INVALID_REQUEST", e))
             }.getOrElse { false }
         }
 

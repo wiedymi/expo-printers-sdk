@@ -1,12 +1,14 @@
 package expo.modules.printers
 
 import android.content.Context
-import android.util.Log
+import expo.modules.printers.commons.PrinterLog
 import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.printers.commons.NetworkValidator
 import expo.modules.printers.commons.PrintOptions
+import expo.modules.printers.commons.printNotStartedEvent
+import expo.modules.printers.commons.toPrintImageEvent
 import expo.modules.printers.commons.PrinterConnectionType
 import expo.modules.printers.commons.PrinterDeviceData
 import expo.modules.printers.commons.safeGetIntOrDefault
@@ -15,7 +17,6 @@ import expo.modules.printers.commons.safeGetString
 import expo.modules.printers.commons.toPrinterConnectionType
 import expo.modules.printers.rongta.RongtaPrinter
 import expo.modules.printers.rongta.RongtaFinder
-import expo.modules.printers.rongta.RongtaPrintResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -23,6 +24,7 @@ import kotlinx.coroutines.withContext
 
 class RongtaPrintersModule : Module() {
     private val TAG = "RongtaPrintersModule"
+    private val logSink = PrinterLog.Sink("Rongta") { entry -> sendEvent("onLog", entry) }
     private var printer: RongtaPrinter? = null
     private var printerFinder: RongtaFinder? = null
     private val coroutineScope = CoroutineScope(Dispatchers.Main)
@@ -33,14 +35,16 @@ class RongtaPrintersModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("RongtaPrintersModule")
 
-        Events("onPrintersFound", "onPrintImage")
+        Events("onPrintersFound", "onPrintImage", "onLog")
 
         OnCreate {
+            PrinterLog.addSink(logSink)
             printer = RongtaPrinter(context)
             printerFinder = RongtaFinder(context)
         }
 
         OnDestroy {
+            PrinterLog.removeSink(logSink)
             printer = null
             printerFinder = null
         }
@@ -56,7 +60,7 @@ class RongtaPrintersModule : Module() {
 
             when (val validation = NetworkValidator.validateNetworkConnection(ipAddress, printerPort)) {
                 is NetworkValidator.ValidationResult.Error -> {
-                    Log.e(TAG, "Invalid network connection parameters: ${validation.message}")
+                    PrinterLog.e(TAG, "Invalid network connection parameters: ${validation.message}")
                     throw IllegalArgumentException(validation.message)
                 }
                 NetworkValidator.ValidationResult.Valid -> {
@@ -79,7 +83,7 @@ class RongtaPrintersModule : Module() {
                 val type = try {
                     connectionType.toPrinterConnectionType()
                 } catch (e: IllegalArgumentException) {
-                    Log.e(TAG, "Invalid connection type: $connectionType", e)
+                    PrinterLog.e(TAG, "Invalid connection type: $connectionType", e)
                     return@AsyncFunction false
                 }
                 coroutineScope.launch(Dispatchers.IO) {
@@ -120,7 +124,7 @@ class RongtaPrintersModule : Module() {
                 }
                 true
             }.onFailure { e ->
-                Log.e(TAG, "Failed to find printers", e)
+                PrinterLog.e(TAG, "Failed to find printers", e)
             }.getOrElse { false }
         }
 
@@ -133,32 +137,17 @@ class RongtaPrintersModule : Module() {
                 val rongtaDeviceData = deviceData.toRongtaDeviceData()
 
                 coroutineScope.launch(Dispatchers.IO) {
-                    val result = printer?.printImage(base64Image, rongtaDeviceData, options?.paperWidth, options?.jobId)
-                    val success = result == RongtaPrintResult.Success
-                    
-                    sendEvent("onPrintImage", mapOf(
-                        "jobId" to options?.jobId,
-                        "success" to success,
-                        "error" to when (result) {
-                            RongtaPrintResult.ErrorInvalidImage -> "Invalid image data"
-                            RongtaPrintResult.ErrorConnection -> "Failed to connect to printer"
-                            RongtaPrintResult.ErrorPermission -> "No permission to access printer"
-                            RongtaPrintResult.ErrorPrint -> "Failed to print receipt"
-                            RongtaPrintResult.ErrorTimeout -> "Connection timed out - printer may be unresponsive"
-                            RongtaPrintResult.ErrorUnknown -> "Unknown error occurred"
-                            RongtaPrintResult.Success -> null
-                            null -> "Printer not initialized"
-                        }
-                    ))
+                    val report = printer?.printImage(base64Image, rongtaDeviceData, options?.paperWidth, options?.jobId)
+                    sendEvent(
+                        "onPrintImage",
+                        report?.toPrintImageEvent(options?.jobId)
+                            ?: printNotStartedEvent(options?.jobId, "NOT_INITIALIZED", null),
+                    )
                 }
                 true
             }.onFailure { e ->
-                Log.e(TAG, "Print failed", e)
-                sendEvent("onPrintImage", mapOf(
-                    "jobId" to options?.jobId,
-                    "success" to false,
-                    "error" to (e.localizedMessage ?: "Unknown error during printing")
-                ))
+                PrinterLog.e(TAG, "Print failed", e)
+                sendEvent("onPrintImage", printNotStartedEvent(options?.jobId, "INVALID_REQUEST", e))
             }.getOrElse { false }
         }
 

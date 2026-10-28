@@ -3,7 +3,7 @@ package expo.modules.printers.starmicronics
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.Context
-import android.util.Log
+import expo.modules.printers.commons.PrinterLog
 import expo.modules.printers.commons.PrinterConnectionType
 import expo.modules.printers.commons.PrinterDeviceData
 import expo.modules.printers.commons.PrinterFinder
@@ -37,7 +37,7 @@ class StarMicronicsFinder(
                                     // Check if it looks like a model name (not a MAC address)
                                     if (!btDeviceName.matches(Regex("[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}"))) {
                                         modelName = btDeviceName
-                                        Log.d(TAG, "Extracted Bluetooth model name from portName: $modelName")
+                                        PrinterLog.d(TAG, "Extracted Bluetooth model name from portName: $modelName")
                                     }
                                 }
 
@@ -45,7 +45,7 @@ class StarMicronicsFinder(
                                 if (modelName.isEmpty() && macAddress.isNotEmpty()) {
                                     modelName = queryBluetoothDeviceName(macAddress)
                                     if (modelName.isNotEmpty()) {
-                                        Log.d(TAG, "Queried Bluetooth device name from MAC $macAddress: $modelName")
+                                        PrinterLog.d(TAG, "Queried Bluetooth device name from MAC $macAddress: $modelName")
                                     }
                                 }
                             }
@@ -77,8 +77,8 @@ class StarMicronicsFinder(
                 }
             }.onFailure { e ->
                 when (e) {
-                    is StarIOPortException -> Log.e(TAG, "Failed to search for printers: ${e.message}")
-                    else -> Log.e(TAG, "Error during printer search", e)
+                    is StarIOPortException -> PrinterLog.e(TAG, "Failed to search for printers: ${e.message}")
+                    else -> PrinterLog.e(TAG, "Error during printer search", e)
                 }
             }.getOrDefault(emptyList())
         }
@@ -92,7 +92,7 @@ class StarMicronicsFinder(
             val device = bluetoothAdapter.getRemoteDevice(macAddress)
             device.name.orEmpty()
         }.onFailure { e ->
-            Log.d(TAG, "Failed to query Bluetooth device name for MAC $macAddress: ${e.message}")
+            PrinterLog.d(TAG, "Failed to query Bluetooth device name for MAC $macAddress: ${e.message}")
         }.getOrDefault("")
     }
 

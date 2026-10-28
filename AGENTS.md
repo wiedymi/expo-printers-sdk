@@ -39,6 +39,7 @@ There are no unit tests. Test changes to printing or status on real printers wit
 - Pin dependencies to exact versions. Keep `peerDependencies` open.
 - The library uses the `compileSdk` of the app (36 for Expo SDK 58). Do not use library versions that need a higher `compileSdk`. For example, Star `stario` 2.14.3, `starioextension` 1.17.1 and `core-ktx` 1.19 need 37.
 - `printImage` returns at once and sends the result in the `onPrintImage` event. `getStatus` returns the result in the promise (`AsyncFunction ... Coroutine`) and rejects with `CodedException` subclasses (`ERR_PRINTER_UNREACHABLE`, `ERR_PRINTER_BUSY`, `ERR_PRINTER_STATUS_UNAVAILABLE`). Run blocking SDK calls on `Dispatchers.IO`.
+- Log with `PrinterLog`, not `android.util.Log`. Start each log tag with the vendor name (`Epson`, `StarMicronics`, `Rongta`), so the line reaches the `onLog` event of that module.
 - Run every blocking printer SDK call in a print or status flow through `PrintSteps.runWithTimeout` with a time limit, and log the steps with `PrintSteps` (job ID, step, outcome, duration). See "Timeouts and Retries" in the README for the limits.
 - Images fit the printable width of the printer: `EpsonModelCapability.printableWidth`, `StarModelCapability.getPaperSize` and the Rongta `bimtapLimitWidth`. The values come from vendor manuals. If sources disagree, use the smaller value, because an image wider than the print area can print nothing.
 - Rongta connections use `RongtaPrinter.connect()` and `disconnect()` under `printMutex`.

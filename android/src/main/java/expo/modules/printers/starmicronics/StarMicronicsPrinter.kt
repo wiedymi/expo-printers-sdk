@@ -4,7 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
-import android.util.Log
+import expo.modules.printers.commons.PrinterLog
 import com.starmicronics.stario.StarIOPort
 import com.starmicronics.stario.StarIOPortException
 import com.starmicronics.stario.StarPrinterStatus
@@ -14,6 +14,7 @@ import com.starmicronics.starioextension.ICommandBuilder.CutPaperAction
 import com.starmicronics.starioextension.StarIoExt
 import expo.modules.printers.commons.PaperStatus
 import expo.modules.printers.commons.PaperWidth
+import expo.modules.printers.commons.PrintReport
 import expo.modules.printers.commons.PrintStepTimeoutException
 import expo.modules.printers.commons.PrintSteps
 import expo.modules.printers.commons.Printer
@@ -38,8 +39,17 @@ class StarMicronicsPrinter(
         deviceData: PrinterDeviceData.Star,
         paperWidth: PaperWidth?,
         jobId: String?,
+    ): PrintReport<StarMicronicsPrintResult> {
+        val steps = PrintSteps(TAG, jobId, ::vendorCodeOf)
+        return steps.report(print(base64Image, deviceData, paperWidth, steps))
+    }
+
+    private suspend fun print(
+        base64Image: String,
+        deviceData: PrinterDeviceData.Star,
+        paperWidth: PaperWidth?,
+        steps: PrintSteps,
     ): StarMicronicsPrintResult {
-        val steps = PrintSteps(TAG, jobId)
         val modelIndex = modelIndexOf(deviceData)
             ?: return StarMicronicsPrintResult.UnsupportedModel.also { steps.log("result", it.code) }
         val image = decodeImage(base64Image)
@@ -64,6 +74,7 @@ class StarMicronicsPrinter(
             }
             attempt++
             steps.log("retry", "${outcome.result.code}, attempt $attempt of $attempts on a new connection")
+            steps.clearFailure()
             delay(BLUETOOTH_RETRY_DELAY)
         }
     }
@@ -71,7 +82,7 @@ class StarMicronicsPrinter(
     override suspend fun getStatus(deviceData: PrinterDeviceData.Star): PrinterStatus {
         val modelIndex = requireNotNull(modelIndexOf(deviceData)) { "Unsupported Star model: ${deviceData.modelName}" }
         val portName = portNameOf(deviceData)
-        val steps = PrintSteps(TAG, jobId = null)
+        val steps = PrintSteps(TAG, jobId = null, ::vendorCodeOf)
 
         val port = try {
             openPort(portName, StarModelCapability.getPortSettings(modelIndex), steps)
@@ -159,7 +170,7 @@ class StarMicronicsPrinter(
 
     private suspend fun releasePort(port: StarIOPort, portName: String, steps: PrintSteps) {
         try {
-            steps.runWithTimeout("release_port", RELEASE_PORT_TIMEOUT) { StarIOPort.releasePort(port) }
+            steps.runWithTimeout("release_port", RELEASE_PORT_TIMEOUT, cleanup = true) { StarIOPort.releasePort(port) }
         } catch (throwable: Exception) {
             logPrinterError("release port", throwable, portName)
         }
@@ -173,6 +184,8 @@ class StarMicronicsPrinter(
             logPrinterError("release port opened after timeout", throwable, portName)
         }
     }
+
+    private fun vendorCodeOf(throwable: Throwable): Int? = (throwable as? StarIOPortException)?.errorCode
 
     private fun openPortFailure(throwable: Throwable): StarMicronicsPrintResult =
         if (throwable is PrintStepTimeoutException) {
@@ -189,7 +202,7 @@ class StarMicronicsPrinter(
         }
 
     private fun modelIndexOf(deviceData: PrinterDeviceData.Star): Int? {
-        Log.d(
+        PrinterLog.d(
             TAG,
             "Identifying printer modelName='${deviceData.modelName}', portName='${deviceData.portName}'",
         )
@@ -199,7 +212,7 @@ class StarMicronicsPrinter(
             ?: StarModelCapability.getModelIdxByTitle(deviceData.modelName)
 
         if (modelIndex == StarModelCapability.NONE) {
-            Log.e(
+            PrinterLog.e(
                 TAG,
                 "Unsupported printer modelName='${deviceData.modelName}', supportedModels=${StarModelCapability.getSupportedModels()}",
             )
@@ -295,7 +308,7 @@ class StarMicronicsPrinter(
 
     private fun logPrinterError(operation: String, throwable: Throwable, portName: String) {
         val errorCode = (throwable as? StarIOPortException)?.errorCode
-        Log.e(
+        PrinterLog.e(
             TAG,
             "Failed to $operation on $portName: type=${throwable::class.java.simpleName}, code=$errorCode, message=${throwable.message}",
             throwable,
