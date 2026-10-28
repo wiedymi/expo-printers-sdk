@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-28
+
 ### Added
 
 - `onLog` event on all printer modules. It sends every native log line (level, tag, message, error, and the job ID, step, outcome and duration of step lines) to the app. The lines still go to logcat.
@@ -109,7 +111,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - TypeScript types for all modules.
 - Example app.
 
-[Unreleased]: https://github.com/wiedymi/expo-printers-sdk/compare/01fd498...main
+[Unreleased]: https://github.com/wiedymi/expo-printers-sdk/compare/v0.10.0...main
+[0.10.0]: https://www.npmjs.com/package/expo-printers-sdk/v/0.10.0
 [0.9.8]: https://www.npmjs.com/package/expo-printers-sdk/v/0.9.8
 [0.9.7]: https://www.npmjs.com/package/expo-printers-sdk/v/0.9.7
 [0.9.6]: https://www.npmjs.com/package/expo-printers-sdk/v/0.9.6
