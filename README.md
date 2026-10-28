@@ -333,9 +333,57 @@ Every blocking call to a printer SDK has a time limit. If a call hangs, for exam
 
 - Star over Bluetooth: if the port does not open or the status check before the print fails, the print starts again once on a new connection after 1 second. There is no retry after print data was sent, so a receipt is not printed twice.
 - A print sends its `onPrintImage` result within about 2 minutes after it starts. Rongta prints one job at a time, so a Rongta job can first wait for the job before it.
-- Timeouts give the error code `PRINT_TIMEOUT` or `CONNECTION_TIMEOUT` on Star, and a timeout message on Epson and Rongta.
+- Timeouts give the error code `CONNECTION_TIMEOUT` or `PRINT_TIMEOUT`.
 - Set `jobId` in `PrintOptions` and compare it with `result.jobId`, so a late result is not counted for the next job.
 - The native logs show every step with its duration, for example `jobId=receipt-1 step=open_port outcome=ok stepMs=812 jobMs=830`. The log tags are `EpsonPrinter`, `StarMicronicsPrinter` and `RongtaPrinter`.
+
+### Print Results and Native Logs
+
+Every `onPrintImage` result has a stable `errorCode`, the native `cause` of a failure and the `steps` of the print, so the app can send them to its own logging or analytics.
+
+```typescript
+type PrintStep = { step: string; outcome: string; durationMs: number };
+
+type PrintFailureCause = {
+  step: string; // The step that failed, for example "send_data"
+  type: string; // The exception type, for example "IOException"
+  message: string | null;
+  vendorCode: number | null; // Epson errorStatus or Star errorCode
+};
+
+// Fields of EpsonPrintResult, StarMicronicsPrintResult and RongtaPrintResult
+type PrintResult = {
+  jobId: string | null;
+  success: boolean;
+  errorCode: string | null; // See the error code type of each vendor
+  error: string | null;
+  cause: PrintFailureCause | null;
+  steps: PrintStep[];
+};
+```
+
+The `onLog` event sends every native log line of a vendor to the app, also during discovery and status checks. The same lines go to logcat.
+
+```typescript
+type PrinterLogEvent = {
+  level: "debug" | "info" | "warn" | "error";
+  tag: string; // For example "StarMicronicsPrinter"
+  message: string;
+  timestamp: number; // Milliseconds since the Unix epoch
+  error: { type: string; message: string | null } | null;
+  jobId?: string | null; // Set for the step lines of a print or status check
+  step?: string;
+  outcome?: string;
+  durationMs?: number;
+  jobDurationMs?: number;
+};
+
+const subscription = StarMicronicsPrinters.addListener("onLog", (event) => {
+  if (event.level === "warn" || event.level === "error" || event.step) {
+    sendToAnalytics(event);
+  }
+});
+```
 
 ### Epson Printers
 
@@ -352,10 +400,22 @@ type EpsonPrinterInfo = {
   deviceType: number; // Epson device type identifier
 };
 
+type EpsonPrintErrorCode =
+  | "INVALID_IMAGE"
+  | "UNSUPPORTED_MODEL"
+  | "PRINTER_OFFLINE"
+  | "PRINT_TIMEOUT"
+  | "UNKNOWN_ERROR"
+  | "NOT_INITIALIZED"
+  | "INVALID_REQUEST";
+
 type EpsonPrintResult = {
   jobId: string | null; // jobId from PrintOptions
   success: boolean;
-  error?: string; // Detailed error message if failed
+  errorCode: EpsonPrintErrorCode | null;
+  error: string | null;
+  cause: PrintFailureCause | null;
+  steps: PrintStep[];
 };
 
 type EpsonPrintersModuleEvents = {
@@ -420,10 +480,24 @@ type RongtaPrinterType =
       productId: number; // USB product ID
     };
 
+type RongtaPrintErrorCode =
+  | "INVALID_IMAGE"
+  | "CONNECTION_FAILED"
+  | "PERMISSION_DENIED"
+  | "CONNECTION_TIMEOUT"
+  | "PRINT_FAILED"
+  | "PRINT_TIMEOUT"
+  | "UNKNOWN_ERROR"
+  | "NOT_INITIALIZED"
+  | "INVALID_REQUEST";
+
 type RongtaPrintResult = {
   jobId: string | null; // jobId from PrintOptions
   success: boolean;
-  error?: string;
+  errorCode: RongtaPrintErrorCode | null;
+  error: string | null;
+  cause: PrintFailureCause | null;
+  steps: PrintStep[];
 };
 ```
 
@@ -462,8 +536,10 @@ type StarMicronicsPrinterInfo = {
 type StarMicronicsPrintResult = {
   jobId: string | null; // jobId from PrintOptions
   success: boolean;
-  errorCode?: StarMicronicsPrintErrorCode;
-  error?: string;
+  errorCode: StarMicronicsPrintErrorCode | null;
+  error: string | null;
+  cause: PrintFailureCause | null;
+  steps: PrintStep[];
 };
 ```
 

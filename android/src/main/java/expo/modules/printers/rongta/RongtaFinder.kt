@@ -5,7 +5,7 @@ import android.content.Context
 import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbManager
 import android.os.Build
-import android.util.Log
+import expo.modules.printers.commons.PrinterLog
 import androidx.annotation.RequiresPermission
 import expo.modules.printers.commons.PrinterConnectionType
 import expo.modules.printers.commons.PrinterDeviceData
@@ -36,7 +36,7 @@ class RongtaFinder(
 
     @RequiresPermission(allOf = [Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN])
     private suspend fun searchBlueToothPrinters(): List<PrinterDeviceData.Rongta> {
-        Log.i(TAG, "Rongta bluetooth scanning...")
+        PrinterLog.i(TAG, "Rongta bluetooth scanning...")
         return runCatching {
             val classicFlow = bluetoothScanner.scan()
             classicFlow.toList().distinctBy { it.address }
@@ -56,17 +56,17 @@ class RongtaFinder(
                     )
                 }
         }.onFailure { throwable ->
-            Log.e(TAG, "Rongta bluetooth scanning failed", throwable)
+            PrinterLog.e(TAG, "Rongta bluetooth scanning failed", throwable)
         }
             .getOrDefault(emptyList())
     }
 
     private suspend fun searchNetworkPrinters(): List<PrinterDeviceData.Rongta> {
-        Log.i(TAG, "Rongta network scanning...")
+        PrinterLog.i(TAG, "Rongta network scanning...")
         return runCatching {
             networkScanner.scan().toSet().toList()
                 .map { device ->
-                    Log.d(TAG, "Network printer found: ${device.deviceIp}:${device.devicePort}")
+                    PrinterLog.d(TAG, "Network printer found: ${device.deviceIp}:${device.devicePort}")
                     PrinterDeviceData.Rongta(
                         connectionType = PrinterConnectionType.Network,
                         type = PrinterDeviceData.Rongta.Type.Network(
@@ -76,13 +76,13 @@ class RongtaFinder(
                     )
                  }
         }.onFailure { throwable ->
-            Log.e(TAG, "Rongta network scanning failed", throwable)
+            PrinterLog.e(TAG, "Rongta network scanning failed", throwable)
         }
         .getOrDefault(emptyList())
     }
 
     private fun searchUsbPrinters(): List<PrinterDeviceData.Rongta> {
-        Log.i(TAG, "Rongta USB scanning...")
+        PrinterLog.i(TAG, "Rongta USB scanning...")
         return runCatching {
             val usbManager = appContext.getSystemService(Context.USB_SERVICE) as UsbManager
             usbManager.deviceList.values
@@ -106,7 +106,7 @@ class RongtaFinder(
                     )
                 }
         }.onFailure { throwable ->
-            Log.e(TAG, "Rongta USB scanning failed", throwable)
+            PrinterLog.e(TAG, "Rongta USB scanning failed", throwable)
         }.getOrDefault(emptyList())
     }
 

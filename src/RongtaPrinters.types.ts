@@ -1,4 +1,10 @@
-import type { PrinterConnectionType } from "./commons";
+import type {
+  PrinterConnectionType,
+  PrinterLogEvent,
+  PrintFailureCause,
+  PrintNotStartedErrorCode,
+  PrintStep,
+} from "./commons";
 
 export type RongtaPrinterInfo = {
   connectionType: PrinterConnectionType;
@@ -26,13 +32,27 @@ export type RongtaPrinterType =
       productId: number;
     };
 
+export type RongtaPrintErrorCode =
+  | "INVALID_IMAGE"
+  | "CONNECTION_FAILED"
+  | "PERMISSION_DENIED"
+  | "CONNECTION_TIMEOUT"
+  | "PRINT_FAILED"
+  | "PRINT_TIMEOUT"
+  | "UNKNOWN_ERROR"
+  | PrintNotStartedErrorCode;
+
 export type RongtaPrintResult = {
   jobId: string | null;
   success: boolean;
-  error?: string;
+  errorCode: RongtaPrintErrorCode | null;
+  error: string | null;
+  cause: PrintFailureCause | null;
+  steps: PrintStep[];
 };
 
 export type RongtaPrintersModuleEvents = {
   onPrintersFound: (data: { printers: RongtaPrinterInfo[] }) => void;
   onPrintImage: (result: RongtaPrintResult) => void;
+  onLog: (event: PrinterLogEvent) => void;
 };

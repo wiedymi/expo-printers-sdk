@@ -7,6 +7,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- `onLog` event on all printer modules. It sends every native log line (level, tag, message, error, and the job ID, step, outcome and duration of step lines) to the app. The lines still go to logcat.
+- `errorCode`, `cause` (failed step, exception type, message, vendor error code) and `steps` (each step with its outcome and duration) in every `onPrintImage` result.
+- Error codes for Epson (`INVALID_IMAGE`, `UNSUPPORTED_MODEL`, `PRINTER_OFFLINE`, `PRINT_TIMEOUT`, `UNKNOWN_ERROR`) and Rongta (`INVALID_IMAGE`, `CONNECTION_FAILED`, `PERMISSION_DENIED`, `CONNECTION_TIMEOUT`, `PRINT_FAILED`, `PRINT_TIMEOUT`, `UNKNOWN_ERROR`), and `NOT_INITIALIZED` and `INVALID_REQUEST` for all vendors.
 - `getStatus(deviceData)` on all printer modules. It returns `online`, `coverOpen`, `paper` (`OK`, `NEAR_END`, `EMPTY`, `UNKNOWN`) and `errors`. It rejects with `ERR_PRINTER_UNREACHABLE`, `ERR_PRINTER_BUSY` or `ERR_PRINTER_STATUS_UNAVAILABLE` when it cannot read the status.
 - Rongta status through the ESC/POS real-time status requests `DLE EOT 1-4`.
 - Optional `paperWidth` print option (`58` or `80`) on `printImage`, for printers that cannot report their paper width.
@@ -19,6 +22,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Star error code `PRINT_TIMEOUT`, and an Epson timeout result ("Printer did not answer in time").
 
 ### Changed
+
+- A print request that cannot start (for example, invalid printer data) gives `INVALID_REQUEST`. Star gave `COMMUNICATION_ERROR` before.
+- An unsupported Epson model gives `UNSUPPORTED_MODEL`, not an unknown error.
+- A denied Rongta USB permission gives `PERMISSION_DENIED`, not a connection error.
 
 - Images are scaled to the printable width of each printer model. Epson used a fixed width of 560 dots, which is wider than the print area of the TM-T88 family (512 dots), the TM-U220 (192 dots) and 58 mm paper.
 - Star and Rongta images are scaled by the vendor SDK.

@@ -1,4 +1,10 @@
-import type { PrinterConnectionType } from "./commons";
+import type {
+  PrinterConnectionType,
+  PrinterLogEvent,
+  PrintFailureCause,
+  PrintNotStartedErrorCode,
+  PrintStep,
+} from "./commons";
 
 export type StarMicronicsPrinterInfo = {
   deviceName: string;
@@ -28,16 +34,19 @@ export type StarMicronicsPrintErrorCode =
   | "OVER_TEMPERATURE"
   | "RECEIVE_BUFFER_OVERFLOW"
   | "HARDWARE_ERROR"
-  | "NOT_INITIALIZED";
+  | PrintNotStartedErrorCode;
 
 export type StarMicronicsPrintResult = {
   jobId: string | null;
   success: boolean;
-  errorCode?: StarMicronicsPrintErrorCode;
-  error?: string;
+  errorCode: StarMicronicsPrintErrorCode | null;
+  error: string | null;
+  cause: PrintFailureCause | null;
+  steps: PrintStep[];
 };
 
 export type StarMicronicsPrintersModuleEvents = {
   onPrintersFound: (data: { printers: StarMicronicsPrinterInfo[] }) => void;
   onPrintImage: (result: StarMicronicsPrintResult) => void;
+  onLog: (event: PrinterLogEvent) => void;
 };

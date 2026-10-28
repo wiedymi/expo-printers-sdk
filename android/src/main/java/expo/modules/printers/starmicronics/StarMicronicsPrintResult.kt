@@ -1,10 +1,12 @@
 package expo.modules.printers.starmicronics
 
+import expo.modules.printers.commons.PrintResultCode
+
 enum class StarMicronicsPrintResult(
-    val code: String,
-    val message: String?,
-) {
-    Success("SUCCESS", null),
+    override val code: String,
+    override val message: String?,
+) : PrintResultCode {
+    Success(PrintResultCode.SUCCESS, null),
     InvalidImage("INVALID_IMAGE", "Invalid image data"),
     UnsupportedModel("UNSUPPORTED_MODEL", "Printer model is not supported"),
     PortOpenFailed("PORT_OPEN_FAILED", "Unable to connect to the printer"),

@@ -2,7 +2,7 @@ package expo.modules.printers.rongta.network
 
 import android.content.Context
 import android.net.wifi.WifiManager
-import android.util.Log
+import expo.modules.printers.commons.PrinterLog
 import com.rt.printerlibrary.ipscan.IpScanner
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -27,20 +27,20 @@ class RongtaNetworkScanner(
 
                 if (multicastLock?.isHeld == false) {
                     multicastLock?.acquire()
-                    Log.d(TAG, "Multicast lock acquired")
+                    PrinterLog.d(TAG, "Multicast lock acquired")
                 }
             }
 
             val scanner = RongtaIpScanner(
                 object : RongtaIpScannerCallbacks {
                     override fun onSearchStart() {
-                        Log.d(TAG, "Rongta network scan started")
+                        PrinterLog.d(TAG, "Rongta network scan started")
                     }
 
                     override fun onSearchFinish(devices: List<IpScanner.DeviceBean>) {
-                        Log.d(TAG, "Rongta network scan finished, found ${devices.size} devices")
+                        PrinterLog.d(TAG, "Rongta network scan finished, found ${devices.size} devices")
                         devices.forEach { device ->
-                            Log.d(TAG, "Found device: IP=${device.deviceIp}, Port=${device.devicePort}, MAC=${device.macAddress}")
+                            PrinterLog.d(TAG, "Found device: IP=${device.deviceIp}, Port=${device.devicePort}, MAC=${device.macAddress}")
                             trySend(device)
                         }
                         // Release lock immediately after scan completes
@@ -49,7 +49,7 @@ class RongtaNetworkScanner(
                     }
 
                     override fun onSearchError(message: String) {
-                        Log.e(TAG, "Rongta network scan error: $message")
+                        PrinterLog.e(TAG, "Rongta network scan error: $message")
                         releaseLock()
                         close(IllegalStateException(message))
                     }
@@ -73,7 +73,7 @@ class RongtaNetworkScanner(
         synchronized(this) {
             if (multicastLock?.isHeld == true) {
                 multicastLock?.release()
-                Log.d(TAG, "Multicast lock released")
+                PrinterLog.d(TAG, "Multicast lock released")
             }
         }
     }

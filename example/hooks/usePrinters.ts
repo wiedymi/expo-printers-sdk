@@ -13,6 +13,7 @@ import type {
   StarMicronicsPrintResult,
   PaperWidth,
   PrinterConnectionType,
+  PrinterLogEvent,
   PrinterStatus,
 } from "expo-printers-sdk";
 import type { Manufacturer, PrinterInfo } from "../types/printer";
@@ -20,6 +21,16 @@ import { deduplicatePrinters } from "../utils/printer-utils";
 
 type PrinterModule =
   typeof EpsonPrinters | typeof RongtaPrinters | typeof StarMicronicsPrinters;
+
+const logNative = (event: PrinterLogEvent): void => {
+  const error = event.error
+    ? ` (${event.error.type}: ${event.error.message})`
+    : "";
+  const line = `[Native ${event.tag}] ${event.message}${error}`;
+  if (event.level === "error") console.error(line);
+  else if (event.level === "warn") console.warn(line);
+  else console.log(line);
+};
 
 export const usePrinters = (manufacturer: Manufacturer) => {
   const [printers, setPrinters] = useState<PrinterInfo[]>([]);
@@ -33,6 +44,15 @@ export const usePrinters = (manufacturer: Manufacturer) => {
   const [printingStates, setPrintingStates] = useState<{
     [key: string]: boolean;
   }>({});
+
+  useEffect(() => {
+    const subscriptions = [
+      EpsonPrinters.addListener("onLog", logNative),
+      RongtaPrinters.addListener("onLog", logNative),
+      StarMicronicsPrinters.addListener("onLog", logNative),
+    ];
+    return () => subscriptions.forEach((subscription) => subscription.remove());
+  }, []);
 
   const handlePrintersFound = useCallback(
     (data: { printers: any[] }) => {

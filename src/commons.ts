@@ -37,3 +37,39 @@ export type PrinterStatusErrorCode =
   | "ERR_PRINTER_UNREACHABLE"
   | "ERR_PRINTER_BUSY"
   | "ERR_PRINTER_STATUS_UNAVAILABLE";
+
+// One step of a print, in the order the library ran it.
+export type PrintStep = {
+  step: string;
+  outcome: string;
+  durationMs: number;
+};
+
+// The native error that ended a print. vendorCode is the error code of the vendor SDK, if it has one.
+export type PrintFailureCause = {
+  step: string;
+  type: string;
+  message: string | null;
+  vendorCode: number | null;
+};
+
+// Error codes of every vendor when the print could not start.
+export type PrintNotStartedErrorCode = "NOT_INITIALIZED" | "INVALID_REQUEST";
+
+export type PrinterLogLevel = "debug" | "info" | "warn" | "error";
+
+// One native log line, sent by the onLog event.
+export type PrinterLogEvent = {
+  level: PrinterLogLevel;
+  tag: string;
+  message: string;
+  // Milliseconds since the Unix epoch.
+  timestamp: number;
+  error: { type: string; message: string | null } | null;
+  // Set for the step lines of a print or status check.
+  jobId?: string | null;
+  step?: string;
+  outcome?: string;
+  durationMs?: number;
+  jobDurationMs?: number;
+};
