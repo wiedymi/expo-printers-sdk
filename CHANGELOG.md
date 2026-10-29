@@ -5,6 +5,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- Rongta USB printing never ended on Android 12 and later when the app asked for USB access, also when the user allowed it, and the next Rongta prints waited for it. The permission result now comes from `UsbManager.hasPermission`, because the immutable permission intent does not contain the result extras.
+- The Rongta USB permission request has a time limit of 60 seconds. When no answer comes, the print ends with `PERMISSION_DENIED`.
+
 ## [0.10.0] - 2026-10-28
 
 ### Added

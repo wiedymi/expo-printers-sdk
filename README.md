@@ -326,6 +326,7 @@ Every blocking call to a printer SDK has a time limit. If a call hangs, for exam
 | Step                        | Epson | Star | Rongta                      |
 | --------------------------- | ----- | ---- | --------------------------- |
 | Connect or open the port    | 20 s  | 15 s | 30 s (10 s for `getStatus`) |
+| USB permission answer       | -     | -    | 60 s                        |
 | Printer status before print | -     | 10 s | -                           |
 | Send the data               | 20 s  | 30 s | 30 s                        |
 | Print result                | -     | 35 s | 60 s                        |

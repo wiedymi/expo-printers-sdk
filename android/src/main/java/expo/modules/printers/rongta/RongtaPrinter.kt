@@ -341,7 +341,8 @@ class RongtaPrinter(
         }
         if (!usbManager.hasPermission(usbDevice)) {
             PrinterLog.i(TAG, "configureUsbPrinter: No permission for USB device, requesting permission")
-            val permissionResult = requestUsbPermission(usbManager, usbDevice)
+            // The print waits under printMutex, so a dialog left open must not block the next prints.
+            val permissionResult = withTimeoutOrNull(USB_PERMISSION_TIMEOUT) { requestUsbPermission(usbManager, usbDevice) } ?: false
             PrinterLog.i(TAG, "configureUsbPrinter: Permission result: $permissionResult")
             if (!permissionResult) {
                 PrinterLog.e(TAG, "USB permission denied for device: $usbDevice")
@@ -396,18 +397,13 @@ class RongtaPrinter(
         receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 PrinterLog.i(TAG, "requestUsbPermission: Receiver triggered with intent: $intent")
-                if (intent?.action == usbPermissionAction) {
-                    val device: android.hardware.usb.UsbDevice? = intent?.getParcelableExtra(UsbManager.EXTRA_DEVICE)
-                    PrinterLog.i(TAG, "requestUsbPermission: Received permission result for device: $device")
-                    if (device != null && device == usbDevice) {
-                        unregisterReceiverSafe()
-                        val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
-                        PrinterLog.i(TAG, "requestUsbPermission: Permission granted: $granted")
-                        if (cont.isActive) {
-                            PrinterLog.i(TAG, "requestUsbPermission: Resuming coroutine with granted=$granted")
-                            cont.resume(granted)
-                        }
-                    }
+                if (intent?.action != usbPermissionAction) return
+                unregisterReceiverSafe()
+                // The PendingIntent is immutable, so the system cannot add EXTRA_DEVICE and EXTRA_PERMISSION_GRANTED.
+                val granted = usbManager.hasPermission(usbDevice)
+                PrinterLog.i(TAG, "requestUsbPermission: Permission granted: $granted")
+                if (cont.isActive) {
+                    cont.resume(granted)
                 }
             }
         }
@@ -507,6 +503,7 @@ class RongtaPrinter(
         private const val PRINTABLE_WIDTH_58_MM = 384
         private const val PRINTABLE_WIDTH_80_MM = 576
         private val CONNECTION_TIMEOUT = 30.seconds
+        private val USB_PERMISSION_TIMEOUT = 60.seconds
         private val PRINT_POLL_FIRST_DELAY = 2.seconds
         private val PRINT_POLL_INTERVAL = 500.milliseconds
         private val STATUS_CONNECTION_TIMEOUT = 10.seconds
