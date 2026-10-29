@@ -9,6 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - Rongta USB printing never ended on Android 12 and later when the app asked for USB access, also when the user allowed it, and the next Rongta prints waited for it. The permission result now comes from `UsbManager.hasPermission`, because the immutable permission intent does not contain the result extras.
 - The Rongta USB permission request has a time limit of 60 seconds. When no answer comes, the print ends with `PERMISSION_DENIED`.
+- Every Rongta USB print logged the error "Failed to check connection state (USB)". The Rongta setup no longer reads the connection state of the new printer interface. That check could not find an earlier connection, and each print and status check already disconnects at the end.
 
 ## [0.10.0] - 2026-10-28
 

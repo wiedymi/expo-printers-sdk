@@ -363,18 +363,6 @@ class RongtaPrinter(
         val printerInterface = usbFactory.create()
         printerInterface.configObject = configBean
         printer.setPrinterInterface(printerInterface)
-        // Disconnect if already connected (after interface is set)
-        runCatching {
-            if (printer.connectState == ConnectStateEnum.Connected) {
-                PrinterLog.i(TAG, "Printer already connected (USB). Disconnecting before reconnecting.")
-                runCatching { printer.disConnect() }
-                    .onFailure { throwable ->
-                        PrinterLog.e(TAG, "Failed to disconnect printer before reconnecting (USB): $throwable")
-                    }
-            }
-        }.onFailure { throwable ->
-            PrinterLog.e(TAG, "Failed to check connection state (USB): $throwable")
-        }
         PrinterLog.i(TAG, "USB printer configured: $usbDevice, configBean: $configBean, printerInterface: $printerInterface")
         return ConfigurationResult.Success(configBean)
     }
@@ -458,18 +446,6 @@ class RongtaPrinter(
         val printerInterface = btFactory.create()
         printerInterface.configObject = configBean
         printer.setPrinterInterface(printerInterface)
-        // Disconnect if already connected (after interface is set)
-        runCatching {
-            if (printer.connectState == ConnectStateEnum.Connected) {
-                PrinterLog.i(TAG, "Printer already connected (Bluetooth). Disconnecting before reconnecting.")
-                runCatching { printer.disConnect() }
-                    .onFailure { throwable ->
-                        PrinterLog.e(TAG, "Failed to disconnect printer before reconnecting (Bluetooth): $throwable")
-                    }
-            }
-        }.onFailure { throwable ->
-            PrinterLog.e(TAG, "Failed to check connection state (Bluetooth): $throwable")
-        }
         return ConfigurationResult.Success(configBean)
     }
 
@@ -482,18 +458,6 @@ class RongtaPrinter(
         val printerInterface = wiFiFactory.create()
         printerInterface.configObject = configBean
         printer.setPrinterInterface(printerInterface)
-        // Disconnect if already connected (after interface is set)
-        runCatching {
-            if (printer.connectState == ConnectStateEnum.Connected) {
-                PrinterLog.i(TAG, "Printer already connected (Network). Disconnecting before reconnecting.")
-                runCatching { printer.disConnect() }
-                    .onFailure { throwable ->
-                        PrinterLog.e(TAG, "Failed to disconnect printer before reconnecting (Network): $throwable")
-                    }
-            }
-        }.onFailure { throwable ->
-            PrinterLog.e(TAG, "Failed to check connection state (Network): $throwable")
-        }
         return ConfigurationResult.Success(configBean)
     }
 
