@@ -23,6 +23,11 @@ export type EpsonPrintErrorCode =
   | "UNSUPPORTED_MODEL"
   | "PRINTER_OFFLINE"
   | "PRINT_TIMEOUT"
+  | "COVER_OPEN"
+  | "PAPER_EMPTY"
+  | "PAPER_JAM"
+  | "CUTTER_ERROR"
+  | "HARDWARE_ERROR"
   | "UNKNOWN_ERROR"
   | PrintNotStartedErrorCode;
 

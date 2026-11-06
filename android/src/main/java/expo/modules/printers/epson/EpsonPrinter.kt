@@ -194,18 +194,29 @@ class EpsonPrinter(
             steps.failed("print_result", PrintStepTimeoutException("print_result", waitLimit), waitStartNanos, cleanup = false)
             return EpsonPrintResult.ErrorTimeout
         }
-        if (code == Epos2CallbackCode.CODE_SUCCESS) {
+        val result = printResultOf(code)
+        if (result == EpsonPrintResult.Success) {
             steps.log("print_result", "ok", waitStartNanos)
-            return EpsonPrintResult.Success
+        } else {
+            steps.failed("print_result", PrintCallbackException(code), waitStartNanos, cleanup = false)
         }
-        steps.failed("print_result", PrintCallbackException(code), waitStartNanos, cleanup = false)
-        return when (code) {
-            Epos2CallbackCode.CODE_ERR_TIMEOUT -> EpsonPrintResult.ErrorTimeout
-            Epos2CallbackCode.CODE_ERR_NOT_FOUND,
-            Epos2CallbackCode.CODE_ERR_PORT,
-            Epos2CallbackCode.CODE_ERR_DISCONNECT -> EpsonPrintResult.ErrorPrinterOffline
-            else -> EpsonPrintResult.ErrorUnknown
-        }
+        return result
+    }
+
+    // The printer errors have the same codes as in Star, so an app can handle both vendors the same way.
+    private fun printResultOf(callbackCode: Int): EpsonPrintResult = when (callbackCode) {
+        Epos2CallbackCode.CODE_SUCCESS -> EpsonPrintResult.Success
+        Epos2CallbackCode.CODE_ERR_TIMEOUT -> EpsonPrintResult.ErrorTimeout
+        Epos2CallbackCode.CODE_ERR_NOT_FOUND,
+        Epos2CallbackCode.CODE_ERR_PORT,
+        Epos2CallbackCode.CODE_ERR_DISCONNECT -> EpsonPrintResult.ErrorPrinterOffline
+        Epos2CallbackCode.CODE_ERR_COVER_OPEN -> EpsonPrintResult.ErrorCoverOpen
+        Epos2CallbackCode.CODE_ERR_EMPTY -> EpsonPrintResult.ErrorPaperEmpty
+        Epos2CallbackCode.CODE_ERR_PAPER_JAM -> EpsonPrintResult.ErrorPaperJam
+        Epos2CallbackCode.CODE_ERR_CUTTER -> EpsonPrintResult.ErrorCutter
+        Epos2CallbackCode.CODE_ERR_MECHANICAL,
+        Epos2CallbackCode.CODE_ERR_UNRECOVERABLE -> EpsonPrintResult.ErrorHardware
+        else -> EpsonPrintResult.ErrorUnknown
     }
 
     // A print that the SDK reports as failed. code is an Epos2CallbackCode value.
