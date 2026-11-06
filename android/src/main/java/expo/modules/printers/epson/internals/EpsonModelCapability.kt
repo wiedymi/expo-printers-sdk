@@ -4,6 +4,7 @@ import com.epson.epos2.printer.Printer
 import expo.modules.printers.commons.PaperWidth
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 object EpsonModelCapability {
 
@@ -183,12 +184,12 @@ object EpsonModelCapability {
     // with each image row. The values per row are estimates with a margin of 2 times or more: thermal printers
     // print 100 mm per second or more (about 1.3 ms per row), and impact printers (TM-U220: 4.7 text lines per
     // second) print an image row in about 20 to 50 ms.
-    private const val PRINT_TIME_BASE_MILLIS = 10_000L
-    private const val THERMAL_PRINT_MILLIS_PER_ROW = 5L
-    private const val IMPACT_PRINT_MILLIS_PER_ROW = 100L
+    private val PRINT_TIME_BASE = 10.seconds
+    private val THERMAL_PRINT_TIME_PER_ROW = 5.milliseconds
+    private val IMPACT_PRINT_TIME_PER_ROW = 100.milliseconds
 
     // The largest sendData time limit that the ePOS SDK accepts in all system configurations.
-    private const val PRINT_TIME_MAX_MILLIS = 300_000L
+    private val PRINT_TIME_MAX = 300.seconds
 
     fun getSupportedModels(): List<String> {
         return modelNameToSeries.keys.toList()
@@ -221,9 +222,7 @@ object EpsonModelCapability {
     // Time limit for sendData, from the start of the data transfer to the end of the print. imageHeight is the
     // height of the scaled image in dots.
     fun printTimeLimit(printerSeries: Int, imageHeight: Int): Duration {
-        val millisPerRow = if (printerSeries in impactSeries) IMPACT_PRINT_MILLIS_PER_ROW else THERMAL_PRINT_MILLIS_PER_ROW
-        return (PRINT_TIME_BASE_MILLIS + imageHeight.toLong() * millisPerRow)
-            .coerceAtMost(PRINT_TIME_MAX_MILLIS)
-            .milliseconds
+        val timePerRow = if (printerSeries in impactSeries) IMPACT_PRINT_TIME_PER_ROW else THERMAL_PRINT_TIME_PER_ROW
+        return (PRINT_TIME_BASE + timePerRow * imageHeight).coerceAtMost(PRINT_TIME_MAX)
     }
 }

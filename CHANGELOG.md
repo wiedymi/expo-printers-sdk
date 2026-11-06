@@ -9,6 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - Epson prints that took more than a few seconds, for example long receipts on the TM-U220, stopped partway and were not cut. The print did not wait for the printer to finish, so the connection could close during the print, and the default Epson SDK time limit of 10 seconds was shorter than the print. The print now waits for the print result of the Epson SDK, and the time limit grows with the image height. See "Timeouts and Retries" in the README.
 - Epson `onPrintImage` gave `SUCCESS` before the printer printed the receipt. It now gives the print result of the printer: `PRINT_TIMEOUT`, `PRINTER_OFFLINE` or `UNKNOWN_ERROR`, with the Epson callback code in `cause.vendorCode`.
+- Epson prints to the same printer now run one after another. A print keeps its connection until the printer finishes, and a second connection to a printer in use fails.
 
 ## [0.10.1] - 2026-10-29
 

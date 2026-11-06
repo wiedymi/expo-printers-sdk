@@ -328,13 +328,13 @@ Every blocking call to a printer SDK has a time limit. If a call hangs, for exam
 | Connect or open the port    | 20 s      | 15 s | 30 s (10 s for `getStatus`) |
 | USB permission answer       | -         | -    | 60 s                        |
 | Printer status before print | -         | 10 s | -                           |
-| Send the data               | 20 s      | 30 s | 30 s                        |
+| Send the data               | see below | 30 s | 30 s                        |
 | Print result                | see below | 35 s | 60 s                        |
 | Disconnect or release       | 5 s       | 5 s  | 5 s                         |
 
 - Star over Bluetooth: if the port does not open or the status check before the print fails, the print starts again once on a new connection after 1 second. There is no retry after print data was sent, so a receipt is not printed twice.
-- Epson print result: the Epson SDK gives the result when the print ends, and the connection stays open until then. The time limit of the print is 10 s plus 5 ms for each row of the scaled image, or 100 ms for each row on the impact printers (TM-U220, TM-U220II, TM-U330), and at most 300 s. The wait for the result ends 5 s after this limit.
-- A print sends its `onPrintImage` result within about 2 minutes after it starts. A long receipt on an Epson impact printer can take more time. Rongta prints one job at a time, so a Rongta job can first wait for the job before it.
+- Epson send and print result: the Epson SDK gives the print result when the print ends, and the connection stays open until then. The time limit of the print is 10 s plus 5 ms for each row of the scaled image, or 100 ms for each row on the impact printers (TM-U220, TM-U220II, TM-U330), and at most 300 s. Sending the data and the wait for the result each end 5 s after this limit.
+- A print sends its `onPrintImage` result within about 2 minutes after it starts. A long receipt on an Epson impact printer can take more time. Rongta prints one job at a time, and Epson prints one job at a time on each printer, so a job can first wait for the job before it.
 - Timeouts give the error code `CONNECTION_TIMEOUT` or `PRINT_TIMEOUT`.
 - Set `jobId` in `PrintOptions` and compare it with `result.jobId`, so a late result is not counted for the next job.
 - The native logs show every step with its duration, for example `jobId=receipt-1 step=open_port outcome=ok stepMs=812 jobMs=830`. The log tags are `EpsonPrinter`, `StarMicronicsPrinter` and `RongtaPrinter`.
