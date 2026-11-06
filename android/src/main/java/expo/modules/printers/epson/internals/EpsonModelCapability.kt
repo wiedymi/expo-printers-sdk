@@ -2,6 +2,9 @@ package expo.modules.printers.epson.internals
 
 import com.epson.epos2.printer.Printer
 import expo.modules.printers.commons.PaperWidth
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 object EpsonModelCapability {
 
@@ -131,6 +134,7 @@ object EpsonModelCapability {
             Printer.SETTING_PAPERWIDTH_76_0 to 192
         )
     )
+    private val impactSeries = setOf(Printer.TM_U220, Printer.TM_U220II, Printer.TM_U330)
 
     private val printableWidthBySeries = mapOf(
         Printer.TM_M10 to PrintableWidth(420),
@@ -161,9 +165,6 @@ object EpsonModelCapability {
         Printer.TM_T100 to PrintableWidth(576),
         Printer.TM_L90 to PrintableWidth(560),
         Printer.TM_L100 to thermal203Dpi,
-        Printer.TM_U220 to impact,
-        Printer.TM_U220II to impact,
-        Printer.TM_U330 to impact,
         Printer.TM_P20 to PrintableWidth(384),
         Printer.TM_P20II to PrintableWidth(384),
         Printer.TM_P60 to PrintableWidth(
@@ -174,10 +175,21 @@ object EpsonModelCapability {
         Printer.TM_P80II to PrintableWidth(576),
         Printer.TM_H6000 to PrintableWidth(512),
         Printer.EU_M30 to thermal203Dpi
-    )
+    ) + impactSeries.associateWith { impact }
 
     // Smallest standard 80 mm width, for series without official data (TM-m55, TM-T90KP, TM-L90LFC, TS-100).
     private const val FALLBACK_PRINTABLE_WIDTH = 512
+
+    // The sendData time limit starts with the SDK default, which is enough for short thermal receipts, and grows
+    // with each image row. The values per row are estimates with a margin of 2 times or more: thermal printers
+    // print 100 mm per second or more (about 1.3 ms per row), and impact printers (TM-U220: 4.7 text lines per
+    // second) print an image row in about 20 to 50 ms.
+    private val PRINT_TIME_BASE = 10.seconds
+    private val THERMAL_PRINT_TIME_PER_ROW = 5.milliseconds
+    private val IMPACT_PRINT_TIME_PER_ROW = 100.milliseconds
+
+    // The largest sendData time limit that the ePOS SDK accepts in all system configurations.
+    private val PRINT_TIME_MAX = 300.seconds
 
     fun getSupportedModels(): List<String> {
         return modelNameToSeries.keys.toList()
@@ -205,5 +217,12 @@ object EpsonModelCapability {
     fun printableWidth(printerSeries: Int, paperWidthSetting: Int?): Int {
         val printableWidth = printableWidthBySeries[printerSeries] ?: return FALLBACK_PRINTABLE_WIDTH
         return paperWidthSetting?.let(printableWidth.dotsByPaperWidth::get) ?: printableWidth.standardDots
+    }
+
+    // Time limit for sendData, from the start of the data transfer to the end of the print. imageHeight is the
+    // height of the scaled image in dots.
+    fun printTimeLimit(printerSeries: Int, imageHeight: Int): Duration {
+        val timePerRow = if (printerSeries in impactSeries) IMPACT_PRINT_TIME_PER_ROW else THERMAL_PRINT_TIME_PER_ROW
+        return (PRINT_TIME_BASE + timePerRow * imageHeight).coerceAtMost(PRINT_TIME_MAX)
     }
 }

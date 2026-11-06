@@ -323,17 +323,18 @@ try {
 
 Every blocking call to a printer SDK has a time limit. If a call hangs, for example in the Android Bluetooth stack, the print ends with a timeout error. The stuck call stays on its own thread, and a connection that it opens later is closed.
 
-| Step                        | Epson | Star | Rongta                      |
-| --------------------------- | ----- | ---- | --------------------------- |
-| Connect or open the port    | 20 s  | 15 s | 30 s (10 s for `getStatus`) |
-| USB permission answer       | -     | -    | 60 s                        |
-| Printer status before print | -     | 10 s | -                           |
-| Send the data               | 20 s  | 30 s | 30 s                        |
-| Print result                | -     | 35 s | 60 s                        |
-| Disconnect or release       | 5 s   | 5 s  | 5 s                         |
+| Step                        | Epson     | Star | Rongta                      |
+| --------------------------- | --------- | ---- | --------------------------- |
+| Connect or open the port    | 20 s      | 15 s | 30 s (10 s for `getStatus`) |
+| USB permission answer       | -         | -    | 60 s                        |
+| Printer status before print | -         | 10 s | -                           |
+| Send the data               | see below | 30 s | 30 s                        |
+| Print result                | see below | 35 s | 60 s                        |
+| Disconnect or release       | 5 s       | 5 s  | 5 s                         |
 
 - Star over Bluetooth: if the port does not open or the status check before the print fails, the print starts again once on a new connection after 1 second. There is no retry after print data was sent, so a receipt is not printed twice.
-- A print sends its `onPrintImage` result within about 2 minutes after it starts. Rongta prints one job at a time, so a Rongta job can first wait for the job before it.
+- Epson send and print result: the Epson SDK gives the print result when the print ends, and the connection stays open until then. The time limit of the print is 10 s plus 5 ms for each row of the scaled image, or 100 ms for each row on the impact printers (TM-U220, TM-U220II, TM-U330), and at most 300 s. Sending the data and the wait for the result each end 5 s after this limit.
+- A print sends its `onPrintImage` result within about 2 minutes after it starts. A long receipt on an Epson impact printer can take more time. Rongta prints one job at a time, and Epson prints one job at a time on each printer, so a job can first wait for the job before it.
 - Timeouts give the error code `CONNECTION_TIMEOUT` or `PRINT_TIMEOUT`.
 - Set `jobId` in `PrintOptions` and compare it with `result.jobId`, so a late result is not counted for the next job.
 - The native logs show every step with its duration, for example `jobId=receipt-1 step=open_port outcome=ok stepMs=812 jobMs=830`. The log tags are `EpsonPrinter`, `StarMicronicsPrinter` and `RongtaPrinter`.
@@ -349,7 +350,7 @@ type PrintFailureCause = {
   step: string; // The step that failed, for example "send_data"
   type: string; // The exception type, for example "IOException"
   message: string | null;
-  vendorCode: number | null; // Epson errorStatus or Star errorCode
+  vendorCode: number | null; // Epson errorStatus (Epos2Exception) or Epos2CallbackCode (PrintCallbackException), or Star errorCode
 };
 
 // Fields of EpsonPrintResult, StarMicronicsPrintResult and RongtaPrintResult
