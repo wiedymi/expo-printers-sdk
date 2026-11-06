@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-06
+
 ### Added
 
 - Epson print error codes `COVER_OPEN`, `PAPER_EMPTY`, `PAPER_JAM`, `CUTTER_ERROR` and `HARDWARE_ERROR` from the print result of the printer. They have the same names and messages as the Star codes. Other printer errors still give `UNKNOWN_ERROR` with the Epson callback code in `cause.vendorCode`.
@@ -129,7 +131,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - TypeScript types for all modules.
 - Example app.
 
-[Unreleased]: https://github.com/wiedymi/expo-printers-sdk/compare/v0.10.1...main
+[Unreleased]: https://github.com/wiedymi/expo-printers-sdk/compare/v0.11.0...main
+[0.11.0]: https://www.npmjs.com/package/expo-printers-sdk/v/0.11.0
 [0.10.1]: https://www.npmjs.com/package/expo-printers-sdk/v/0.10.1
 [0.10.0]: https://www.npmjs.com/package/expo-printers-sdk/v/0.10.0
 [0.9.8]: https://www.npmjs.com/package/expo-printers-sdk/v/0.9.8

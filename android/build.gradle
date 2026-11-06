@@ -4,13 +4,13 @@ plugins {
 }
 
 group = 'expo.modules.printers'
-version = '0.10.1'
+version = '0.11.0'
 
 android {
   namespace "expo.modules.printers"
   defaultConfig {
     versionCode 1
-    versionName "0.10.1"
+    versionName "0.11.0"
     consumerProguardFiles 'proguard-rules.pro'
   }
   lintOptions {
