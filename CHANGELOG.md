@@ -20,6 +20,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- `getStatus` rejected with codes such as `ERR_SF0` in minified release builds, not with `ERR_PRINTER_UNREACHABLE`, `ERR_PRINTER_BUSY` or `ERR_PRINTER_STATUS_UNAVAILABLE`. Expo made the code from the exception class name, and R8 changes class names. The codes are now set explicitly.
 - Epson impact printers (TM-U220, TM-U220II, TM-U330): text printed broken and grainy, and gray text printed pale or not at all. The image is scaled down about 3 times, and `Bitmap.createScaledBitmap` reads only a few of the pixels that each dot covers. The library now gives each dot the average of all these pixels, and makes a dot black or white by comparing it with the dots around it. Thermal printers do not change.
 - Epson and Star: a status check during a print could make the print fail, because the printer accepts one connection at a time.
 - Star: a slow Bluetooth port open could stop the prints and status checks of all Star printers for many minutes, until the app restarted. `StarIOPort.getPort` and `releasePort` are synchronized in the Star SDK, and each print that timed out left one more open in the queue. Now one open runs at a time. A print or status check waits up to 15 s for the open that runs and gives `CONNECTION_TIMEOUT` (`ERR_PRINTER_UNREACHABLE` for `getStatus`) when the wait ends first. When the printer answers, the next print opens a new port at once.

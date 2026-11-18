@@ -285,7 +285,7 @@ Epson `printImage` and `previewImage` take `imageConversion` in their options:
 - `"sdk"`: the image is scaled to the printable width, and the Epson SDK makes it black and white. This is the conversion of version 0.11.0 and earlier.
 - `"areaAverage"`: the conversion above, on any Epson printer.
 
-`EpsonPrinters.previewImage` returns the image that `printImage` sends to the printer, as a base64 PNG with its size in dots. It does not connect to the printer, so the printable width comes from `paperWidth` or the standard paper of the model. With `"sdk"`, the Epson SDK makes this image black and white when it prints.
+`EpsonPrinters.previewImage` returns the image that `printImage` sends to the printer, as a base64 PNG with its size in dots. It does not connect to the printer, so the printable width comes from `paperWidth` or the standard paper of the model. With `"sdk"`, the Epson SDK makes the image black and white when it prints, so the preview uses a similar 50% threshold, and the print can differ a little.
 
 ```typescript
 const preview = await EpsonPrinters.previewImage(base64Image, printer, {

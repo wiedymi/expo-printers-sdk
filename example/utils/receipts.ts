@@ -1,6 +1,5 @@
 import { Asset } from "expo-asset";
 import { File } from "expo-file-system";
-import { fetchImageAsBase64 } from "./printer-utils";
 
 export type ReceiptOption = "SHORT" | "LONG" | "CHART" | "URL";
 
@@ -19,12 +18,37 @@ const RECEIPT_ASSETS: Record<Exclude<ReceiptOption, "URL">, number> = {
   CHART: require("../assets/receipts/test-chart.png"),
 };
 
-export const loadReceiptBase64 = async (
-  receipt: ReceiptOption,
-  imageUrl: string,
-): Promise<string> => {
-  if (receipt === "URL") return fetchImageAsBase64(imageUrl);
-  const asset = await Asset.fromModule(RECEIPT_ASSETS[receipt]).downloadAsync();
-  if (!asset.localUri) throw new Error(`Cannot load the ${receipt} image`);
+const fetchImageAsBase64 = async (imageUrl: string): Promise<string> => {
+  const response = await fetch(imageUrl);
+  if (!response.ok) {
+    throw new Error(`Cannot load the image: HTTP ${response.status}`);
+  }
+  const blob = await response.blob();
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+    reader.onerror = () => reject(new Error("Cannot read the image"));
+    reader.readAsDataURL(blob);
+  });
+};
+
+const loadAssetAsBase64 = async (assetModule: number): Promise<string> => {
+  const asset = Asset.fromModule(assetModule);
+  // In an Android release build, expo-asset gives a bundled image its drawable resource name as localUri, not
+  // a file. Clear it, so that downloadAsync copies the image to a file in the cache.
+  if (asset.localUri && !asset.localUri.includes(":")) {
+    asset.localUri = null;
+    asset.downloaded = false;
+  }
+  await asset.downloadAsync();
+  if (!asset.localUri) throw new Error(`Cannot load ${asset.name}`);
   return new File(asset.localUri).base64();
 };
+
+export const loadReceiptBase64 = (
+  receipt: ReceiptOption,
+  imageUrl: string,
+): Promise<string> =>
+  receipt === "URL"
+    ? fetchImageAsBase64(imageUrl)
+    : loadAssetAsBase64(RECEIPT_ASSETS[receipt]);

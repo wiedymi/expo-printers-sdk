@@ -26,8 +26,8 @@ declare class EpsonPrintersModule extends NativeModule<EpsonPrintersModuleEvents
   ): Promise<boolean>;
   getStatus(deviceData: EpsonPrinterInfo): Promise<PrinterStatus>;
   // Makes the image that printImage sends to the printer, without a connection. The printable width comes from
-  // options.paperWidth or the standard paper of the model. With "sdk", the Epson SDK makes this image black and
-  // white when it prints.
+  // options.paperWidth or the standard paper of the model. With "sdk", the Epson SDK makes the image black and
+  // white when it prints, so the preview uses a similar 50% threshold, and the print can differ a little.
   previewImage(
     base64Image: string,
     deviceData: EpsonPrinterInfo,

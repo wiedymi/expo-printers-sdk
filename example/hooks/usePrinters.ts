@@ -1,279 +1,93 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   EpsonPrinters,
   RongtaPrinters,
   StarMicronicsPrinters,
 } from "expo-printers-sdk";
-import type {
-  EpsonPrinterInfo,
-  RongtaPrinterInfo,
-  StarMicronicsPrinterInfo,
-  EpsonPrintOptions,
-  EpsonPrintResult,
-  RongtaPrintResult,
-  StarMicronicsPrintResult,
-  PrinterConnectionType,
-  PrinterLogEvent,
-  PrinterStatus,
-} from "expo-printers-sdk";
-import type { Manufacturer, PrinterInfo } from "../types/printer";
-import { deduplicatePrinters } from "../utils/printer-utils";
+import type { PrinterConnectionType } from "expo-printers-sdk";
+import type { Printer, Vendor } from "../types/printer";
+import { findPrinters, printerId } from "../utils/printers";
 
-type PrinterModule =
-  typeof EpsonPrinters | typeof RongtaPrinters | typeof StarMicronicsPrinters;
+// The printers that the app found or added, and the selected printer.
+export const usePrinters = (log: (message: string) => void) => {
+  const [printers, setPrinters] = useState<Printer[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [searching, setSearching] = useState<Vendor | null>(null);
 
-// Each print gets its own job ID, also when one tap sends several jobs.
-let nextJobNumber = 1;
-
-const logNative = (event: PrinterLogEvent): void => {
-  const error = event.error
-    ? ` (${event.error.type}: ${event.error.message})`
-    : "";
-  const line = `[Native ${event.tag}] ${event.message}${error}`;
-  if (event.level === "error") console.error(line);
-  else if (event.level === "warn") console.warn(line);
-  else console.log(line);
-};
-
-export const usePrinters = (manufacturer: Manufacturer) => {
-  const [printers, setPrinters] = useState<PrinterInfo[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [supportedModels, setSupportedModels] = useState<string[]>([]);
-  const modelsCacheRef = useState<Record<Manufacturer, string[]>>({
-    EPSON: [],
-    STAR: [],
-    RONGTA: [],
-  })[0];
-  const [printingStates, setPrintingStates] = useState<{
-    [key: string]: boolean;
-  }>({});
+  const addPrinters = useCallback((found: Printer[]) => {
+    setPrinters((current) => {
+      const known = new Set(current.map(printerId));
+      return [
+        ...current,
+        ...found.filter((printer) => !known.has(printerId(printer))),
+      ];
+    });
+    setSelectedId(
+      (current) => current ?? (found[0] ? printerId(found[0]) : null),
+    );
+  }, []);
 
   useEffect(() => {
     const subscriptions = [
-      EpsonPrinters.addListener("onLog", logNative),
-      RongtaPrinters.addListener("onLog", logNative),
-      StarMicronicsPrinters.addListener("onLog", logNative),
+      EpsonPrinters.addListener("onPrintersFound", ({ printers: found }) => {
+        log(`Epson search found ${found.length} printer(s)`);
+        addPrinters(found.map((info) => ({ vendor: "EPSON", info })));
+        setSearching(null);
+      }),
+      StarMicronicsPrinters.addListener(
+        "onPrintersFound",
+        ({ printers: found }) => {
+          log(`Star search found ${found.length} printer(s)`);
+          addPrinters(found.map((info) => ({ vendor: "STAR", info })));
+          setSearching(null);
+        },
+      ),
+      RongtaPrinters.addListener("onPrintersFound", ({ printers: found }) => {
+        log(`Rongta search found ${found.length} printer(s)`);
+        addPrinters(found.map((info) => ({ vendor: "RONGTA", info })));
+        setSearching(null);
+      }),
     ];
     return () => subscriptions.forEach((subscription) => subscription.remove());
-  }, []);
+  }, [addPrinters, log]);
 
-  const handlePrintersFound = useCallback(
-    (data: { printers: any[] }) => {
-      console.log(
-        `[Event] onPrintersFound: ${data.printers.length} printer(s)`,
-      );
-      data.printers.forEach((p, i) => {
-        console.log(`[Event]   [${i}] ${JSON.stringify(p)}`);
-      });
-      setPrinters((prev) =>
-        deduplicatePrinters([
-          ...prev,
-          ...data.printers.map((printer) => ({
-            type: manufacturer,
-            info: printer,
-          })),
-        ]),
-      );
-      setIsSearching(false);
-    },
-    [manufacturer],
-  );
-
-  const handlePrintResult = useCallback(
-    (
-      result: EpsonPrintResult | RongtaPrintResult | StarMicronicsPrintResult,
-    ) => {
-      if (result.success) {
-        console.log("[Event] onPrintImage: SUCCESS");
-      } else {
-        console.error(
-          `[Event] onPrintImage: FAILED - ${result.error || "Unknown error"}`,
-        );
-      }
-      setPrintingStates((prev) => {
-        const newState = { ...prev };
-        Object.keys(newState).forEach((key) => {
-          newState[key] = false;
-        });
-        return newState;
-      });
-      return result;
-    },
-    [],
-  );
-
-  const getPrinterModule = (mfr: Manufacturer): PrinterModule => {
-    switch (mfr) {
-      case "EPSON":
-        return EpsonPrinters;
-      case "RONGTA":
-        return RongtaPrinters;
-      case "STAR":
-        return StarMicronicsPrinters;
-    }
-  };
-
-  const refreshSupportedModels = useCallback(
-    async (forceRefresh = false): Promise<void> => {
+  const search = useCallback(
+    async (vendor: Vendor, connectionType: PrinterConnectionType) => {
+      setSearching(vendor);
+      log(`Searching ${vendor} ${connectionType} printers...`);
       try {
-        const cached = modelsCacheRef[manufacturer];
-        if (!forceRefresh && cached.length > 0) {
-          setSupportedModels(cached);
-          return;
-        }
-
-        const mod = getPrinterModule(manufacturer) as any;
-        if (typeof mod.getSupportedModels === "function") {
-          const models: string[] = (await mod.getSupportedModels()) ?? [];
-          modelsCacheRef[manufacturer] = models;
-          setSupportedModels(models);
-          return;
-        } else {
-          setSupportedModels([]);
-          return;
+        if (!(await findPrinters(vendor, connectionType))) {
+          log(`${vendor} search did not start`);
+          setSearching(null);
         }
       } catch (error) {
-        console.warn("Failed to load supported models", error);
-        setSupportedModels([]);
-        return;
-      }
-    },
-    [manufacturer, modelsCacheRef],
-  );
-
-  useEffect(() => {
-    refreshSupportedModels();
-  }, [refreshSupportedModels]);
-
-  useEffect(() => {
-    let foundListener: { remove: () => void } | null = null;
-    let printListener: { remove: () => void } | null = null;
-
-    const mod = getPrinterModule(manufacturer);
-
-    foundListener = mod.addListener("onPrintersFound", handlePrintersFound);
-    printListener = mod.addListener("onPrintImage", handlePrintResult);
-
-    return () => {
-      foundListener?.remove();
-      printListener?.remove();
-    };
-  }, [manufacturer, handlePrintersFound, handlePrintResult]);
-
-  const searchPrinters = useCallback(
-    async (connectionType: PrinterConnectionType): Promise<boolean> => {
-      setPrinters([]);
-      setIsSearching(true);
-
-      try {
-        const mod = getPrinterModule(manufacturer);
-        const result = await mod.findPrinters(connectionType);
-        if (!result) {
-          setIsSearching(false);
-        }
-        return result;
-      } catch (error) {
-        setIsSearching(false);
+        setSearching(null);
         throw error;
       }
     },
-    [manufacturer],
+    [log],
   );
 
-  const connectManually = useCallback(
-    async (ipAddress: string, modelName: string, port: number) => {
-      const mod = getPrinterModule(manufacturer);
-      const printerInfo = await mod.connectManually("Network", {
-        ipAddress,
-        port,
-        modelName,
-      });
-
-      if (printerInfo) {
-        setPrinters((prev) =>
-          deduplicatePrinters([
-            ...prev,
-            { type: manufacturer, info: printerInfo },
-          ]),
-        );
-      }
-
-      return printerInfo;
+  const add = useCallback(
+    (printer: Printer) => {
+      addPrinters([printer]);
+      setSelectedId(printerId(printer));
     },
-    [manufacturer],
+    [addPrinters],
   );
 
-  const printImage = useCallback(
-    async (
-      base64Image: string,
-      printer: PrinterInfo,
-      printerId: string,
-      { paperWidth, imageConversion }: EpsonPrintOptions,
-    ): Promise<boolean> => {
-      setPrintingStates((prev) => ({ ...prev, [printerId]: true }));
-      const options = { jobId: `test-${nextJobNumber++}`, paperWidth };
-      console.log(
-        `[Print] jobId: ${options.jobId}, paperWidth: ${paperWidth ?? "auto"}`,
-      );
-
-      try {
-        switch (printer.type) {
-          case "EPSON":
-            return await EpsonPrinters.printImage(
-              base64Image,
-              printer.info as EpsonPrinterInfo,
-              { ...options, imageConversion },
-            );
-          case "RONGTA":
-            return await RongtaPrinters.printImage(
-              base64Image,
-              printer.info as RongtaPrinterInfo,
-              options,
-            );
-          case "STAR":
-            return await StarMicronicsPrinters.printImage(
-              base64Image,
-              printer.info as StarMicronicsPrinterInfo,
-              options,
-            );
-          default:
-            throw new Error("Unknown printer type");
-        }
-      } catch (error) {
-        setPrintingStates((prev) => ({ ...prev, [printerId]: false }));
-        throw error;
-      }
-    },
-    [],
-  );
-
-  const getStatus = useCallback(
-    (printer: PrinterInfo): Promise<PrinterStatus> => {
-      switch (printer.type) {
-        case "EPSON":
-          return EpsonPrinters.getStatus(printer.info as EpsonPrinterInfo);
-        case "RONGTA":
-          return RongtaPrinters.getStatus(printer.info as RongtaPrinterInfo);
-        case "STAR":
-          return StarMicronicsPrinters.getStatus(
-            printer.info as StarMicronicsPrinterInfo,
-          );
-        default:
-          throw new Error("Unknown printer type");
-      }
-    },
-    [],
+  const selected = useMemo(
+    () => printers.find((printer) => printerId(printer) === selectedId) ?? null,
+    [printers, selectedId],
   );
 
   return {
     printers,
-    isSearching,
-    supportedModels,
-    printingStates,
-    searchPrinters,
-    connectManually,
-    printImage,
-    getStatus,
-    refreshSupportedModels,
+    selected,
+    selectedId,
+    select: setSelectedId,
+    searching,
+    search,
+    add,
   };
 };

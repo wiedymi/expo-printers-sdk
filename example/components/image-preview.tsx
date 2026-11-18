@@ -1,22 +1,16 @@
-import React from "react";
 import {
-  Modal,
-  View,
-  Text,
   Image,
+  Modal,
+  Pressable,
   ScrollView,
-  TouchableOpacity,
   StyleSheet,
+  Text,
+  View,
   useWindowDimensions,
-  Platform,
 } from "react-native";
 import type { EpsonImagePreview } from "expo-printers-sdk";
-
-const MONO_FONT = Platform.select({
-  ios: "Menlo",
-  android: "monospace",
-  default: "monospace",
-});
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { colors, MONO_FONT } from "../theme";
 
 type ImagePreviewProps = {
   preview: EpsonImagePreview | null;
@@ -30,6 +24,7 @@ export default function ImagePreview({
   title,
   onClose,
 }: ImagePreviewProps) {
+  const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const imageWidth = screenWidth - 32;
 
@@ -39,23 +34,27 @@ export default function ImagePreview({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top + 12 }]}>
         <View style={styles.header}>
-          <Text style={styles.title}>
-            {title}
-            {preview ? `\n${preview.width} x ${preview.height} dots` : ""}
-          </Text>
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={onClose}
-            accessibilityLabel="Close preview"
-            accessible
-          >
+          <View style={styles.titles}>
+            <Text style={styles.title}>{title}</Text>
+            {preview && (
+              <Text style={styles.size}>
+                {preview.width} x {preview.height} dots
+              </Text>
+            )}
+          </View>
+          <Pressable style={styles.close} onPress={onClose}>
             <Text style={styles.closeText}>Close</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
         {preview && (
-          <ScrollView contentContainerStyle={styles.content}>
+          <ScrollView
+            contentContainerStyle={[
+              styles.content,
+              { paddingBottom: insets.bottom + 16 },
+            ]}
+          >
             <Image
               source={{ uri: `data:image/png;base64,${preview.base64}` }}
               style={[
@@ -76,36 +75,45 @@ export default function ImagePreview({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
-    paddingTop: 16,
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingBottom: 12,
+    gap: 12,
+  },
+  titles: {
+    flex: 1,
+    gap: 2,
   },
   title: {
-    fontSize: 14,
-    color: "#111",
-    fontFamily: MONO_FONT,
-    flex: 1,
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.text,
   },
-  closeButton: {
-    backgroundColor: "#444",
+  size: {
+    fontSize: 12,
+    color: colors.muted,
+    fontFamily: MONO_FONT,
+  },
+  close: {
+    backgroundColor: colors.primary,
+    borderRadius: 8,
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 10,
   },
   closeText: {
-    color: "#fff",
+    color: colors.onPrimary,
     fontWeight: "600",
   },
   content: {
     padding: 16,
   },
   image: {
+    backgroundColor: "#ffffff",
     borderWidth: 1,
-    borderColor: "#d1d1d1",
+    borderColor: colors.border,
   },
 });

@@ -46,6 +46,17 @@ internal fun Bitmap.toMonochrome(targetWidth: Int): Bitmap {
     return Bitmap.createBitmap(pixels, targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
 }
 
+// Each pixel is black when it is darker than MIDDLE_LIGHTNESS, like the HALFTONE_THRESHOLD mode of the Epson SDK.
+// The Epson SDK can differ in details, so use it only to show an approximate result.
+internal fun Bitmap.toThresholdMonochrome(): Bitmap {
+    val pixels = IntArray(Math.multiplyExact(width, height))
+    getPixels(pixels, 0, width, 0, 0, width, height)
+    for (index in pixels.indices) {
+        pixels[index] = if (lightness(pixels[index]) < MIDDLE_LIGHTNESS) Color.BLACK else Color.WHITE
+    }
+    return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
+}
+
 // Lightness from 0 (black) to 255 (white) of each target dot, in rows. Each value is the mean of the source pixels
 // that the dot covers, weighted by the covered area.
 private fun Bitmap.areaAverageLightness(targetWidth: Int, targetHeight: Int): FloatArray {

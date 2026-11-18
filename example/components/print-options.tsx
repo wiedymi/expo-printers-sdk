@@ -1,8 +1,13 @@
-import React from "react";
-import { View, Text, TextInput, StyleSheet, Platform } from "react-native";
-import type { EpsonImageConversion } from "expo-printers-sdk";
-import ButtonRow from "./button-row";
+import { StyleSheet, TextInput, View } from "react-native";
+import type {
+  EpsonImageConversion,
+  EpsonPrintOptions,
+  PaperWidth,
+} from "expo-printers-sdk";
 import { RECEIPT_LABELS, type ReceiptOption } from "../utils/receipts";
+import { colors } from "../theme";
+import Segmented from "./segmented";
+import { Label } from "./section";
 
 export type PaperWidthOption = "AUTO" | "58" | "80";
 export type JobCountOption = "1" | "3";
@@ -15,6 +20,22 @@ export type PrintSettings = {
   jobCount: JobCountOption;
 };
 
+export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
+  receipt: "SHORT",
+  imageUrl: "https://placehold.co/600x400/000000/FFFFFF.png",
+  paperWidth: "AUTO",
+  imageConversion: "auto",
+  jobCount: "1",
+};
+
+export const toPrintOptions = (settings: PrintSettings): EpsonPrintOptions => ({
+  paperWidth:
+    settings.paperWidth === "AUTO"
+      ? undefined
+      : (Number(settings.paperWidth) as PaperWidth),
+  imageConversion: settings.imageConversion,
+});
+
 const PAPER_WIDTH_LABELS: Record<PaperWidthOption, string> = {
   AUTO: "Auto",
   "58": "58 mm",
@@ -24,7 +45,7 @@ const PAPER_WIDTH_LABELS: Record<PaperWidthOption, string> = {
 const IMAGE_CONVERSION_LABELS: Record<EpsonImageConversion, string> = {
   auto: "Auto",
   sdk: "SDK",
-  areaAverage: "Area avg",
+  areaAverage: "Area average",
 };
 
 const JOB_COUNT_LABELS: Record<JobCountOption, string> = {
@@ -32,32 +53,28 @@ const JOB_COUNT_LABELS: Record<JobCountOption, string> = {
   "3": "3 jobs",
 };
 
-const MONO_FONT = Platform.select({
-  ios: "Menlo",
-  android: "monospace",
-  default: "monospace",
-});
-
 type PrintOptionsProps = {
   settings: PrintSettings;
   onChange: (settings: PrintSettings) => void;
+  showImageConversion: boolean;
 };
 
 export default function PrintOptions({
   settings,
   onChange,
+  showImageConversion,
 }: PrintOptionsProps) {
   const update = (change: Partial<PrintSettings>) =>
     onChange({ ...settings, ...change });
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>Image</Text>
-      <ButtonRow
+      <Label>Image</Label>
+      <Segmented
         options={["SHORT", "LONG", "CHART", "URL"]}
-        selected={settings.receipt}
-        onSelect={(receipt) => update({ receipt })}
-        labelMap={RECEIPT_LABELS}
+        value={settings.receipt}
+        onChange={(receipt) => update({ receipt })}
+        labels={RECEIPT_LABELS}
       />
       {settings.receipt === "URL" && (
         <TextInput
@@ -68,28 +85,36 @@ export default function PrintOptions({
           autoCorrect={false}
           keyboardType="url"
           placeholder="https://example.com/receipt.png"
+          placeholderTextColor={colors.muted}
         />
       )}
-      <Text style={styles.label}>Paper width</Text>
-      <ButtonRow
+
+      <Label>Paper width</Label>
+      <Segmented
         options={["AUTO", "58", "80"]}
-        selected={settings.paperWidth}
-        onSelect={(paperWidth) => update({ paperWidth })}
-        labelMap={PAPER_WIDTH_LABELS}
+        value={settings.paperWidth}
+        onChange={(paperWidth) => update({ paperWidth })}
+        labels={PAPER_WIDTH_LABELS}
       />
-      <Text style={styles.label}>Epson image conversion</Text>
-      <ButtonRow
-        options={["auto", "sdk", "areaAverage"]}
-        selected={settings.imageConversion}
-        onSelect={(imageConversion) => update({ imageConversion })}
-        labelMap={IMAGE_CONVERSION_LABELS}
-      />
-      <Text style={styles.label}>Jobs per tap</Text>
-      <ButtonRow
+
+      {showImageConversion && (
+        <>
+          <Label>Image conversion (Epson)</Label>
+          <Segmented
+            options={["auto", "sdk", "areaAverage"]}
+            value={settings.imageConversion}
+            onChange={(imageConversion) => update({ imageConversion })}
+            labels={IMAGE_CONVERSION_LABELS}
+          />
+        </>
+      )}
+
+      <Label>Jobs for each tap on Print</Label>
+      <Segmented
         options={["1", "3"]}
-        selected={settings.jobCount}
-        onSelect={(jobCount) => update({ jobCount })}
-        labelMap={JOB_COUNT_LABELS}
+        value={settings.jobCount}
+        onChange={(jobCount) => update({ jobCount })}
+        labels={JOB_COUNT_LABELS}
       />
     </View>
   );
@@ -97,22 +122,15 @@ export default function PrintOptions({
 
 const styles = StyleSheet.create({
   container: {
-    gap: 2,
-  },
-  label: {
-    fontSize: 12,
-    color: "#666",
-    marginHorizontal: 4,
-    fontFamily: MONO_FONT,
+    gap: 10,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#d1d1d1",
-    marginHorizontal: 4,
-    marginBottom: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    color: "#111",
-    fontFamily: MONO_FONT,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: colors.text,
+    fontSize: 14,
   },
 });

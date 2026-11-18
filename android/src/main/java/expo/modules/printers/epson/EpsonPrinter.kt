@@ -21,6 +21,7 @@ import expo.modules.printers.commons.PrinterStatusUnavailableException
 import expo.modules.printers.commons.PrinterUnreachableException
 import expo.modules.printers.commons.scaledHeight
 import expo.modules.printers.commons.toMonochrome
+import expo.modules.printers.commons.toThresholdMonochrome
 import expo.modules.printers.commons.withLockOrBusy
 import expo.modules.printers.epson.internals.EpsonModelCapability
 import com.epson.epos2.Epos2CallbackCode
@@ -69,7 +70,7 @@ class EpsonPrinter(
 
     // The image that printImage sends to the printer, made without a connection. The printable width comes from
     // paperWidth or the standard paper of the model, because the printer is not asked. With ImageConversion.SDK,
-    // the Epson SDK makes this image black and white when it prints.
+    // the Epson SDK makes the image black and white when it prints, so the preview uses a similar threshold.
     fun previewImage(
         base64Image: String,
         deviceData: PrinterDeviceData.EPSON,
@@ -81,7 +82,8 @@ class EpsonPrinter(
         require(printerSeries != EpsonModelCapability.UNKNOWN) { "Unsupported Epson model: ${deviceData.deviceName}" }
         val paperWidthSetting = paperWidth?.let(EpsonModelCapability::paperWidthSetting)
         val printableWidth = EpsonModelCapability.printableWidth(printerSeries, paperWidthSetting)
-        return printableImage(image, printerSeries, printableWidth, imageConversion)
+        val printable = printableImage(image, printerSeries, printableWidth, imageConversion)
+        return if (usesAreaAverage(imageConversion, printerSeries)) printable else printable.toThresholdMonochrome()
     }
 
     private suspend fun print(
@@ -335,14 +337,19 @@ class EpsonPrinter(
         printerSeries: Int,
         printableWidth: Int,
         imageConversion: ImageConversion,
-    ): Bitmap {
-        val areaAverage = when (imageConversion) {
+    ): Bitmap =
+        if (usesAreaAverage(imageConversion, printerSeries)) {
+            image.toMonochrome(printableWidth)
+        } else {
+            image.scaledToWidth(printableWidth)
+        }
+
+    private fun usesAreaAverage(imageConversion: ImageConversion, printerSeries: Int): Boolean =
+        when (imageConversion) {
             ImageConversion.AUTO -> EpsonModelCapability.isImpactPrinter(printerSeries)
             ImageConversion.SDK -> false
             ImageConversion.AREA_AVERAGE -> true
         }
-        return if (areaAverage) image.toMonochrome(printableWidth) else image.scaledToWidth(printableWidth)
-    }
 
     // Scales up or down to the width and keeps the aspect ratio.
     private fun Bitmap.scaledToWidth(targetWidth: Int): Bitmap {

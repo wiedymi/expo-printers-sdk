@@ -37,15 +37,16 @@ data class PrinterStatus(
     )
 }
 
-// JS error codes: ERR_PRINTER_UNREACHABLE, ERR_PRINTER_BUSY, ERR_PRINTER_STATUS_UNAVAILABLE.
+// The JS error codes are set here, because Expo makes a code from the class name otherwise, and R8 changes class
+// names in minified release builds.
 class PrinterUnreachableException(cause: Throwable? = null) :
-    CodedException("Cannot connect to the printer", cause)
+    CodedException("ERR_PRINTER_UNREACHABLE", "Cannot connect to the printer", cause)
 
 class PrinterBusyException(cause: Throwable? = null) :
-    CodedException("The printer is in use by another connection", cause)
+    CodedException("ERR_PRINTER_BUSY", "The printer is in use by another connection", cause)
 
 class PrinterStatusUnavailableException(cause: Throwable? = null) :
-    CodedException("The printer did not report its status", cause)
+    CodedException("ERR_PRINTER_STATUS_UNAVAILABLE", "The printer did not report its status", cause)
 
 // A status check does not wait for a print. When a print or another status check holds the lock of the printer,
 // it throws PrinterBusyException at once. A print waits for a status check that runs.
