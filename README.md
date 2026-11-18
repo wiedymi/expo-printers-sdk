@@ -242,6 +242,7 @@ Check out our comprehensive example app in the `/example` folder that demonstrat
 - **Sample images**: a short and a long receipt, a test chart with edge marks, line widths and gray steps, or an image from a URL
 - **Print options**: paper width, Epson image conversion, and 1 or 3 jobs for each tap, to test the print queue
 - **Epson preview**: the image that the printer gets, without a printer
+- **Results**: each print job and status check with its error code, duration and steps, and the native logs with a level filter
 - **Compact, modern UI**
 - **Comprehensive error handling**
 - **Modern React Native best practices**
