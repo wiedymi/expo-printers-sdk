@@ -22,6 +22,7 @@ import expo.modules.printers.commons.PrinterBusyException
 import expo.modules.printers.commons.PrinterConnectionType
 import expo.modules.printers.commons.PrinterDeviceData
 import expo.modules.printers.commons.PrinterError
+import expo.modules.printers.commons.PrinterLocks
 import expo.modules.printers.commons.PrinterStatus
 import expo.modules.printers.commons.PrinterStatusUnavailableException
 import expo.modules.printers.commons.PrinterUnreachableException
@@ -29,21 +30,16 @@ import expo.modules.printers.commons.withLockOrBusy
 import expo.modules.printers.starmicronics.internals.StarModelCapability
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.ByteArrayInputStream
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.seconds
 
 class StarMicronicsPrinter(
     private val appContext: Context,
 ) : Printer<PrinterDeviceData.Star, StarMicronicsPrintResult> {
 
-    // A second port to a printer in use fails, so the prints to one printer run one after another, and a status
-    // check does not run during a print.
-    private val printLocks = ConcurrentHashMap<String, Mutex>()
-
-    private fun printLockOf(portName: String): Mutex = printLocks.computeIfAbsent(portName) { Mutex() }
+    // A second port to a printer in use fails.
+    private val printLocks = PrinterLocks()
 
     override suspend fun printImage(
         base64Image: String,
@@ -52,9 +48,7 @@ class StarMicronicsPrinter(
         jobId: String?,
     ): PrintReport<StarMicronicsPrintResult> {
         val steps = PrintSteps(TAG, jobId, ::vendorCodeOf)
-        val waitStartNanos = System.nanoTime()
-        val result = printLockOf(portNameOf(deviceData)).withLock {
-            steps.log("wait_for_printer", "ok", waitStartNanos)
+        val result = steps.withPrinterLock(printLocks.of(portNameOf(deviceData))) {
             print(base64Image, deviceData, paperWidth, steps)
         }
         return steps.report(result)
@@ -98,7 +92,7 @@ class StarMicronicsPrinter(
     override suspend fun getStatus(deviceData: PrinterDeviceData.Star): PrinterStatus {
         val modelIndex = requireNotNull(modelIndexOf(deviceData)) { "Unsupported Star model: ${deviceData.modelName}" }
         val portName = portNameOf(deviceData)
-        return printLockOf(portName).withLockOrBusy {
+        return printLocks.of(portName).withLockOrBusy {
             readStatus(portName, StarModelCapability.getPortSettings(modelIndex))
         }
     }

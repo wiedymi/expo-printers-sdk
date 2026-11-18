@@ -52,17 +52,26 @@ private fun Bitmap.areaAverageLightness(targetWidth: Int, targetHeight: Int): Fl
     val scaleX = width.toDouble() / targetWidth
     val scaleY = height.toDouble() / targetHeight
     val sourceRow = IntArray(width)
+    // A source row can cover two target rows, so the last row scaled to the target width is kept.
+    val scaledRow = DoubleArray(targetWidth)
+    var scaledRowY = -1
     val result = FloatArray(Math.multiplyExact(targetWidth, targetHeight))
     for (targetY in 0 until targetHeight) {
         val rowStart = targetY * targetWidth
         forEachOverlap(targetY, scaleY, height) { sourceY, weightY ->
-            getPixels(sourceRow, 0, width, 0, sourceY, width, 1)
-            for (targetX in 0 until targetWidth) {
-                var rowSum = 0.0
-                forEachOverlap(targetX, scaleX, width) { sourceX, weightX ->
-                    rowSum += lightness(sourceRow[sourceX]) * weightX
+            if (sourceY != scaledRowY) {
+                getPixels(sourceRow, 0, width, 0, sourceY, width, 1)
+                for (targetX in 0 until targetWidth) {
+                    var sum = 0.0
+                    forEachOverlap(targetX, scaleX, width) { sourceX, weightX ->
+                        sum += lightness(sourceRow[sourceX]) * weightX
+                    }
+                    scaledRow[targetX] = sum / scaleX
                 }
-                result[rowStart + targetX] += (rowSum * weightY / (scaleX * scaleY)).toFloat()
+                scaledRowY = sourceY
+            }
+            for (targetX in 0 until targetWidth) {
+                result[rowStart + targetX] += (scaledRow[targetX] * weightY / scaleY).toFloat()
             }
         }
     }

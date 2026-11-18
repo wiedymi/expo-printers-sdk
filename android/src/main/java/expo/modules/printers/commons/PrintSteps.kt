@@ -5,6 +5,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.time.Duration
@@ -57,6 +59,15 @@ class PrintSteps(
 
     fun <R> report(result: R): PrintReport<R> = PrintReport(result, records.toList(), cause)
 
+    // Runs block when the job gets the lock of the printer, and logs the wait as the step wait_for_printer.
+    suspend inline fun <T> withPrinterLock(lock: Mutex, block: () -> T): T {
+        val waitStartNanos = System.nanoTime()
+        return lock.withLock {
+            log("wait_for_printer", "ok", waitStartNanos)
+            block()
+        }
+    }
+
     inline fun <T> measure(step: String, block: () -> T): T {
         val stepStartNanos = System.nanoTime()
         return try {
@@ -86,10 +97,11 @@ class PrintSteps(
             val timeoutException = PrintStepTimeoutException(step, timeout)
             failed(step, timeoutException, stepStartNanos, cleanup)
             call.invokeOnCompletion { lateCause ->
-                val outcome = if (lateCause == null) {
-                    "finished after the timeout"
+                val (outcome, lateEnd) = if (lateCause == null) {
+                    "finished after the timeout" to Result.success(call.getCompleted())
                 } else {
-                    "failed after the timeout: ${lateCause::class.java.simpleName}: ${lateCause.message}"
+                    "failed after the timeout: ${lateCause::class.java.simpleName}: ${lateCause.message}" to
+                        Result.failure<T>(lateCause)
                 }
                 PrinterLog.step(
                     tag,
@@ -100,7 +112,7 @@ class PrintSteps(
                     elapsedMillis(jobStartNanos),
                     PrinterLog.Level.WARN,
                 )
-                onLateEnd(if (lateCause == null) Result.success(call.getCompleted()) else Result.failure(lateCause))
+                onLateEnd(lateEnd)
             }
             throw timeoutException
         }

@@ -14,6 +14,7 @@ import expo.modules.printers.commons.Printer
 import expo.modules.printers.commons.PrinterBusyException
 import expo.modules.printers.commons.PrinterDeviceData
 import expo.modules.printers.commons.PrinterError
+import expo.modules.printers.commons.PrinterLocks
 import expo.modules.printers.commons.PrinterStatus
 import expo.modules.printers.commons.PrinterStatusUnavailableException
 import expo.modules.printers.commons.PrinterUnreachableException
@@ -30,11 +31,8 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.ByteArrayInputStream
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.resume
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -44,11 +42,8 @@ class EpsonPrinter(
     private val appContext: Context,
 ) : Printer<PrinterDeviceData.EPSON, EpsonPrintResult> {
 
-    // A print keeps its connection until the paper is printed, and a second connection to a printer in use fails,
-    // so the prints to one printer run one after another, and a status check does not run during a print.
-    private val printLocks = ConcurrentHashMap<String, Mutex>()
-
-    private fun printLockOf(target: String): Mutex = printLocks.computeIfAbsent(target) { Mutex() }
+    // A print keeps its connection until the paper is printed, and a second connection to a printer in use fails.
+    private val printLocks = PrinterLocks()
 
     override suspend fun printImage(
         base64Image: String,
@@ -57,9 +52,7 @@ class EpsonPrinter(
         jobId: String?,
     ): PrintReport<EpsonPrintResult> {
         val steps = PrintSteps(TAG, jobId, ::vendorCodeOf)
-        val waitStartNanos = System.nanoTime()
-        val result = printLockOf(deviceData.target).withLock {
-            steps.log("wait_for_printer", "ok", waitStartNanos)
+        val result = steps.withPrinterLock(printLocks.of(deviceData.target)) {
             print(base64Image, deviceData, paperWidth, steps)
         }
         return steps.report(result)
@@ -168,7 +161,7 @@ class EpsonPrinter(
     override suspend fun getStatus(deviceData: PrinterDeviceData.EPSON): PrinterStatus {
         val printerSeries = EpsonModelCapability.printerSeriesByName(deviceData.deviceName)
         require(printerSeries != EpsonModelCapability.UNKNOWN) { "Unsupported Epson model: ${deviceData.deviceName}" }
-        return printLockOf(deviceData.target).withLockOrBusy { readStatus(printerSeries, deviceData.target) }
+        return printLocks.of(deviceData.target).withLockOrBusy { readStatus(printerSeries, deviceData.target) }
     }
 
     private suspend fun readStatus(printerSeries: Int, target: String): PrinterStatus {

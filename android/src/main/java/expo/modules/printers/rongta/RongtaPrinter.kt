@@ -50,7 +50,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -84,9 +83,7 @@ class RongtaPrinter(
         jobId: String?,
     ): PrintReport<RongtaPrintResult> {
         val steps = PrintSteps(TAG, jobId)
-        val waitStartNanos = System.nanoTime()
-        val result = printMutex.withLock {
-            steps.log("wait_for_printer", "ok", waitStartNanos)
+        val result = steps.withPrinterLock(printMutex) {
             sendPrintJob(base64Image, deviceData, paperWidth, steps).also { result -> steps.log("result", result.code) }
         }
         return steps.report(result)
