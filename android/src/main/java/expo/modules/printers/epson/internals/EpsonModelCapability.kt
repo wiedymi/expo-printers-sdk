@@ -222,7 +222,9 @@ object EpsonModelCapability {
     // Time limit for sendData, from the start of the data transfer to the end of the print. imageHeight is the
     // height of the scaled image in dots.
     fun printTimeLimit(printerSeries: Int, imageHeight: Int): Duration {
-        val timePerRow = if (printerSeries in impactSeries) IMPACT_PRINT_TIME_PER_ROW else THERMAL_PRINT_TIME_PER_ROW
+        val timePerRow = if (isImpactPrinter(printerSeries)) IMPACT_PRINT_TIME_PER_ROW else THERMAL_PRINT_TIME_PER_ROW
         return (PRINT_TIME_BASE + timePerRow * imageHeight).coerceAtMost(PRINT_TIME_MAX)
     }
+
+    fun isImpactPrinter(printerSeries: Int): Boolean = printerSeries in impactSeries
 }

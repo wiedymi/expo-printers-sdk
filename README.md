@@ -270,6 +270,13 @@ type PrinterConnectionType = "Bluetooth" | "Network" | "USB";
 
 Set `paperWidth` for printers that have 58 mm paper and cannot report it, for example a 58 mm Rongta or a Star TSP100IV with the 58 mm paper guide.
 
+The Epson impact printers (TM-U220, TM-U220II, TM-U330) have 192 dots on 76 mm paper, so a receipt image is scaled down about 3 times. For these printers, the library makes the black and white image itself:
+
+- Each dot gets the average of all the image pixels that it covers, so thin lines do not disappear.
+- A dot is black when it is darker than the dots around it, and white when it is lighter. Thus gray text, white text on a dark box and dark text on a light gray box all stay visible.
+
+For the best result on these printers, make the image 192 pixels wide, with black text only and no anti-aliasing.
+
 ```typescript
 type PaperWidth = 58 | 80;
 

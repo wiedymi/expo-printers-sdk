@@ -17,6 +17,8 @@ import expo.modules.printers.commons.PrinterError
 import expo.modules.printers.commons.PrinterStatus
 import expo.modules.printers.commons.PrinterStatusUnavailableException
 import expo.modules.printers.commons.PrinterUnreachableException
+import expo.modules.printers.commons.scaledHeight
+import expo.modules.printers.commons.toMonochrome
 import expo.modules.printers.commons.withLockOrBusy
 import expo.modules.printers.epson.internals.EpsonModelCapability
 import com.epson.epos2.Epos2CallbackCode
@@ -97,7 +99,13 @@ class EpsonPrinter(
                 }
                 val printableWidth = EpsonModelCapability.printableWidth(printerSeries, paperWidthSetting)
                 // The ePOS SDK has no scaling option, and an image wider than the print area can print nothing.
-                val scaledImg = img.scaledToWidth(printableWidth)
+                // An impact printer has few dots (192 on 76 mm paper), so its image gets the conversion of
+                // toMonochrome. Thermal printers keep the scaling and the black and white conversion of the SDK.
+                val scaledImg = if (EpsonModelCapability.isImpactPrinter(printerSeries)) {
+                    img.toMonochrome(printableWidth)
+                } else {
+                    img.scaledToWidth(printableWidth)
+                }
                 val printTimeLimit = EpsonModelCapability.printTimeLimit(printerSeries, scaledImg.height)
                 PrinterLog.i(
                     TAG,
@@ -307,10 +315,7 @@ class EpsonPrinter(
     // Scales up or down to the width and keeps the aspect ratio.
     private fun Bitmap.scaledToWidth(targetWidth: Int): Bitmap {
         if (width == targetWidth) return this
-        val targetHeight = (height.toLong() * targetWidth / width)
-            .coerceIn(1, Int.MAX_VALUE.toLong())
-            .toInt()
-        return Bitmap.createScaledBitmap(this, targetWidth, targetHeight, true)
+        return Bitmap.createScaledBitmap(this, targetWidth, scaledHeight(targetWidth), true)
     }
 
     // disconnect fails with ERR_PROCESSING while the SDK still runs a print, for example after the wait for the
