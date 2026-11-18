@@ -318,6 +318,7 @@ try {
 - Epson uses `Printer.getStatus` of the ePOS SDK.
 - Star uses `StarIOPort.retreiveStatus`.
 - Rongta sends the ESC/POS real-time status requests `DLE EOT 1-4`. A printer that does not answer them gives `ERR_PRINTER_STATUS_UNAVAILABLE`.
+- A status check does not wait for a print and does not run during a print. When a print or another status check uses the printer, `getStatus` rejects at once with `ERR_PRINTER_BUSY`. A print waits for a status check that runs. Rongta has one connection for all its printers, so it gives `ERR_PRINTER_BUSY` while any Rongta printer prints.
 
 ### Timeouts and Retries
 
@@ -326,18 +327,21 @@ Every blocking call to a printer SDK has a time limit. If a call hangs, for exam
 | Step                        | Epson     | Star | Rongta                      |
 | --------------------------- | --------- | ---- | --------------------------- |
 | Connect or open the port    | 20 s      | 15 s | 30 s (10 s for `getStatus`) |
+| Wait for another port open  | -         | 15 s | -                           |
 | USB permission answer       | -         | -    | 60 s                        |
 | Printer status before print | -         | 10 s | -                           |
 | Send the data               | see below | 30 s | 30 s                        |
 | Print result                | see below | 35 s | 60 s                        |
 | Disconnect or release       | 5 s       | 5 s  | 5 s                         |
 
-- Star over Bluetooth: if the port does not open or the status check before the print fails, the print starts again once on a new connection after 1 second. There is no retry after print data was sent, so a receipt is not printed twice.
+- Star over Bluetooth: if the port open or the status check before the print fails with an error, the print starts again once on a new connection after 1 second. There is no retry after a timeout, because it makes the print and the prints after it much longer. There is no retry after print data was sent, so a receipt is not printed twice.
+- Star opens one port at a time in the app. `StarIOPort.getPort` and `releasePort` are synchronized in the Star SDK, so a slow open, for example over Bluetooth, stops the opens of all Star printers, also after its timeout. A print or status check waits up to 15 s for the open that runs and does not start a second open. When the printer answers, the next print opens a new port at once.
 - Epson send and print result: the Epson SDK gives the print result when the print ends, and the connection stays open until then. The time limit of the print is 10 s plus 5 ms for each row of the scaled image, or 100 ms for each row on the impact printers (TM-U220, TM-U220II, TM-U330), and at most 300 s. Sending the data and the wait for the result each end 5 s after this limit.
-- A print sends its `onPrintImage` result within about 2 minutes after it starts. A long receipt on an Epson impact printer can take more time. Rongta prints one job at a time, and Epson prints one job at a time on each printer, so a job can first wait for the job before it.
+- A print sends its `onPrintImage` result within about 2 minutes after it starts. A long receipt on an Epson impact printer, or a Star print that waits for another port open and then starts again, can take more time. Rongta prints one job at a time, and Epson and Star print one job at a time on each printer, so a job can first wait for the job or the status check before it.
 - Timeouts give the error code `CONNECTION_TIMEOUT` or `PRINT_TIMEOUT`.
 - Set `jobId` in `PrintOptions` and compare it with `result.jobId`, so a late result is not counted for the next job.
 - The native logs show every step with its duration, for example `jobId=receipt-1 step=open_port outcome=ok stepMs=812 jobMs=830`. The log tags are `EpsonPrinter`, `StarMicronicsPrinter` and `RongtaPrinter`.
+- A call that ends after its timeout logs a warning with its real duration, for example `jobId=receipt-1 step=open_port outcome=finished after the timeout stepMs=48210 jobMs=48230`.
 
 ### Print Results and Native Logs
 

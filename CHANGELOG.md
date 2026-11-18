@@ -5,6 +5,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- `getStatus` does not wait for a print. When a print or another status check uses the printer, it rejects at once with `ERR_PRINTER_BUSY`. A print waits for a status check that runs. Rongta has one connection for all its printers, so its `getStatus` gives `ERR_PRINTER_BUSY` while any Rongta printer prints. Before, Rongta `getStatus` waited for the print.
+- Star prints to the same printer run one after another, as on Epson. The Star print result has the new steps `wait_for_printer` and `wait_for_open`.
+- Star over Bluetooth: a print does not start again after the port open or the status check before the print times out. A retry after a timeout made the print and the prints after it much longer.
+- A call that ends after its timeout logs a `warn` entry (was `info`) with its real duration in `durationMs` and the job duration in `jobDurationMs`.
+
+### Fixed
+
+- Epson and Star: a status check during a print could make the print fail, because the printer accepts one connection at a time.
+- Star: a slow Bluetooth port open could stop the prints and status checks of all Star printers for many minutes, until the app restarted. `StarIOPort.getPort` and `releasePort` are synchronized in the Star SDK, and each print that timed out left one more open in the queue. Now one open runs at a time. A print or status check waits up to 15 s for the open that runs and gives `CONNECTION_TIMEOUT` (`ERR_PRINTER_UNREACHABLE` for `getStatus`) when the wait ends first. When the printer answers, the next print opens a new port at once.
+
 ## [0.11.0] - 2026-11-06
 
 ### Added

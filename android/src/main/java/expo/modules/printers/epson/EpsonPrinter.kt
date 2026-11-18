@@ -17,6 +17,7 @@ import expo.modules.printers.commons.PrinterError
 import expo.modules.printers.commons.PrinterStatus
 import expo.modules.printers.commons.PrinterStatusUnavailableException
 import expo.modules.printers.commons.PrinterUnreachableException
+import expo.modules.printers.commons.withLockOrBusy
 import expo.modules.printers.epson.internals.EpsonModelCapability
 import com.epson.epos2.Epos2CallbackCode
 import com.epson.epos2.Epos2Exception
@@ -42,8 +43,10 @@ class EpsonPrinter(
 ) : Printer<PrinterDeviceData.EPSON, EpsonPrintResult> {
 
     // A print keeps its connection until the paper is printed, and a second connection to a printer in use fails,
-    // so the prints to one printer run one after another.
+    // so the prints to one printer run one after another, and a status check does not run during a print.
     private val printLocks = ConcurrentHashMap<String, Mutex>()
+
+    private fun printLockOf(target: String): Mutex = printLocks.computeIfAbsent(target) { Mutex() }
 
     override suspend fun printImage(
         base64Image: String,
@@ -53,7 +56,7 @@ class EpsonPrinter(
     ): PrintReport<EpsonPrintResult> {
         val steps = PrintSteps(TAG, jobId, ::vendorCodeOf)
         val waitStartNanos = System.nanoTime()
-        val result = printLocks.computeIfAbsent(deviceData.target) { Mutex() }.withLock {
+        val result = printLockOf(deviceData.target).withLock {
             steps.log("wait_for_printer", "ok", waitStartNanos)
             print(base64Image, deviceData, paperWidth, steps)
         }
@@ -157,11 +160,14 @@ class EpsonPrinter(
     override suspend fun getStatus(deviceData: PrinterDeviceData.EPSON): PrinterStatus {
         val printerSeries = EpsonModelCapability.printerSeriesByName(deviceData.deviceName)
         require(printerSeries != EpsonModelCapability.UNKNOWN) { "Unsupported Epson model: ${deviceData.deviceName}" }
+        return printLockOf(deviceData.target).withLockOrBusy { readStatus(printerSeries, deviceData.target) }
+    }
 
+    private suspend fun readStatus(printerSeries: Int, target: String): PrinterStatus {
         val steps = PrintSteps(TAG, jobId = null, ::vendorCodeOf)
         val epsonPrinter = EpsPrinter(printerSeries, EpsPrinter.LANG_EN, appContext)
         try {
-            epsonPrinter.connectWithTimeout(deviceData.target, steps)
+            epsonPrinter.connectWithTimeout(target, steps)
         } catch (exception: Epos2Exception) {
             PrinterLog.e(TAG, "getStatus: connect failed with status ${exception.errorStatus}")
             throw if (exception.errorStatus == Epos2Exception.ERR_IN_USE) {
@@ -233,9 +239,11 @@ class EpsonPrinter(
         steps.runWithTimeout(
             "connect",
             CONNECT_TIMEOUT,
-            onLateResult = {
-                runCatching { disconnect() }
-                    .onFailure { throwable -> PrinterLog.e(TAG, "failed to close connection opened after timeout $throwable") }
+            onLateEnd = { result ->
+                result.onSuccess {
+                    runCatching { disconnect() }
+                        .onFailure { throwable -> PrinterLog.e(TAG, "failed to close connection opened after timeout $throwable") }
+                }
             },
         ) {
             connect(target, EpsPrinter.PARAM_DEFAULT)

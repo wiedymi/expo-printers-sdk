@@ -1,6 +1,7 @@
 package expo.modules.printers.commons
 
 import expo.modules.kotlin.exception.CodedException
+import kotlinx.coroutines.sync.Mutex
 
 enum class PaperStatus {
     OK,
@@ -45,3 +46,14 @@ class PrinterBusyException(cause: Throwable? = null) :
 
 class PrinterStatusUnavailableException(cause: Throwable? = null) :
     CodedException("The printer did not report its status", cause)
+
+// A status check does not wait for a print. When a print or another status check holds the lock of the printer,
+// it throws PrinterBusyException at once. A print waits for a status check that runs.
+inline fun <T> Mutex.withLockOrBusy(block: () -> T): T {
+    if (!tryLock()) throw PrinterBusyException()
+    try {
+        return block()
+    } finally {
+        unlock()
+    }
+}
