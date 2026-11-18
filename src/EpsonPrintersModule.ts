@@ -27,11 +27,14 @@ declare class EpsonPrintersModule extends NativeModule<EpsonPrintersModuleEvents
   getStatus(deviceData: EpsonPrinterInfo): Promise<PrinterStatus>;
   // Makes the image that printImage sends to the printer, without a connection. The printable width comes from
   // options.paperWidth or the standard paper of the model. With "sdk", the Epson SDK makes the image black and
-  // white when it prints, so the preview uses a similar 50% threshold, and the print can differ a little.
+  // white when it prints, and the preview uses the same threshold, so the preview has the same dots.
+  // React Native smooths an image that it shows larger, so set targetWidth to the width in pixels of the view
+  // that shows the preview, and show the PNG at its own size: each dot becomes a sharp square of `scale` pixels.
   previewImage(
     base64Image: string,
     deviceData: EpsonPrinterInfo,
     options?: EpsonPrintOptions,
+    targetWidth?: number,
   ): Promise<EpsonImagePreview>;
 }
 

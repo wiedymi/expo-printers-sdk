@@ -286,13 +286,26 @@ Epson `printImage` and `previewImage` take `imageConversion` in their options:
 - `"sdk"`: the image is scaled to the printable width, and the Epson SDK makes it black and white. This is the conversion of version 0.11.0 and earlier.
 - `"areaAverage"`: the conversion above, on any Epson printer.
 
-`EpsonPrinters.previewImage` returns the image that `printImage` sends to the printer, as a base64 PNG with its size in dots. It does not connect to the printer, so the printable width comes from `paperWidth` or the standard paper of the model. With `"sdk"`, the Epson SDK makes the image black and white when it prints, so the preview uses a similar 50% threshold, and the print can differ a little.
+`EpsonPrinters.previewImage` returns the image that `printImage` sends to the printer, as a base64 PNG with its size in dots. It does not connect to the printer, so the printable width comes from `paperWidth` or the standard paper of the model. With `"sdk"`, the Epson SDK makes the image black and white when it prints, and the preview uses the same threshold (gray 0.299 R + 0.587 G + 0.114 B, black below 128), so the preview has the same dots as the print. The preview uses the model of `deviceData`, so preview with the model of the printer that prints.
+
+React Native smooths an image that it shows larger, so the dots of a small preview become blurred. Set `targetWidth` to the width in pixels of the view that shows the preview. Each dot then becomes a sharp square of `scale` x `scale` pixels, and the app shows the PNG at its own size.
 
 ```typescript
-const preview = await EpsonPrinters.previewImage(base64Image, printer, {
-  imageConversion: "areaAverage",
-});
-// <Image source={{ uri: `data:image/png;base64,${preview.base64}` }} />
+const targetWidth = Math.floor(viewWidth * PixelRatio.get());
+const preview = await EpsonPrinters.previewImage(
+  base64Image,
+  printer,
+  { imageConversion: "areaAverage" },
+  targetWidth,
+);
+const pixelRatio = PixelRatio.get();
+// <Image
+//   source={{ uri: `data:image/png;base64,${preview.base64}` }}
+//   style={{
+//     width: (preview.width * preview.scale) / pixelRatio,
+//     height: (preview.height * preview.scale) / pixelRatio,
+//   }}
+// />
 ```
 
 ```typescript
@@ -469,6 +482,7 @@ type EpsonImagePreview = {
   base64: string; // PNG
   width: number; // Printer dots
   height: number;
+  scale: number; // PNG pixels for each dot, from targetWidth
 };
 ```
 
@@ -494,7 +508,7 @@ EpsonPrinters.printImage(base64Image: string, deviceData: EpsonPrinterInfo, opti
 EpsonPrinters.getStatus(deviceData: EpsonPrinterInfo): Promise<PrinterStatus>
 
 // Make the image that printImage sends to the printer, without a connection (see Paper Width)
-EpsonPrinters.previewImage(base64Image: string, deviceData: EpsonPrinterInfo, options?: EpsonPrintOptions): Promise<EpsonImagePreview>
+EpsonPrinters.previewImage(base64Image: string, deviceData: EpsonPrinterInfo, options?: EpsonPrintOptions, targetWidth?: number): Promise<EpsonImagePreview>
 
 // Event listener management
 EpsonPrinters.addListener(eventName: string, listener: Function): EventSubscription

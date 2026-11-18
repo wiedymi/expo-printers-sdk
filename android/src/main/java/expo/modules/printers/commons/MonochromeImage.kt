@@ -46,8 +46,9 @@ internal fun Bitmap.toMonochrome(targetWidth: Int): Bitmap {
     return Bitmap.createBitmap(pixels, targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
 }
 
-// Each pixel is black when it is darker than MIDDLE_LIGHTNESS, like the HALFTONE_THRESHOLD mode of the Epson SDK.
-// The Epson SDK can differ in details, so use it only to show an approximate result.
+// Each pixel is black when it is darker than MIDDLE_LIGHTNESS. This is the HALFTONE_THRESHOLD mode of the Epson SDK
+// with brightness 1.0: its native code (_Epos_bgrToHalftoneGraphicsByThreshold in libepos2.so) uses the same gray
+// value 0.299 R + 0.587 G + 0.114 B, white for transparent pixels, and black below 128.
 internal fun Bitmap.toThresholdMonochrome(): Bitmap {
     val pixels = IntArray(Math.multiplyExact(width, height))
     getPixels(pixels, 0, width, 0, 0, width, height)

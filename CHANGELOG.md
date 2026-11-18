@@ -8,7 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Added
 
 - Epson `imageConversion` print option: `"auto"` (default), `"sdk"` (the conversion of 0.11.0) or `"areaAverage"`. See "Paper Width" in the README.
-- `EpsonPrinters.previewImage` returns the image that `printImage` sends to the printer, as a base64 PNG, without a connection.
+- `EpsonPrinters.previewImage` returns the image that `printImage` sends to the printer, as a base64 PNG, without a connection. With `"sdk"`, it uses the same threshold as the Epson SDK, so it has the same dots. With `targetWidth`, each dot is a square of whole pixels, so the preview stays sharp in React Native.
 - Example app: sample receipts and a test chart, an image URL, the Epson image conversion, 1 or 3 jobs for each tap, and the Epson preview.
 
 ### Changed

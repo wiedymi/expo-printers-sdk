@@ -5,8 +5,8 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  PixelRatio,
   View,
-  useWindowDimensions,
 } from "react-native";
 import type { EpsonImagePreview } from "expo-printers-sdk";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -18,15 +18,21 @@ type ImagePreviewProps = {
   onClose: () => void;
 };
 
-// Shows the image that the printer gets, scaled to the screen width.
+const PADDING = 16;
+
+// The width in pixels for previewImage, so that the preview fits the screen.
+export const previewTargetWidth = (screenWidth: number): number =>
+  Math.floor((screenWidth - 2 * PADDING) * PixelRatio.get());
+
+// Shows the image that the printer gets. The PNG has whole pixels for each dot and is shown at its own size,
+// because React Native smooths an image that it shows larger.
 export default function ImagePreview({
   preview,
   title,
   onClose,
 }: ImagePreviewProps) {
   const insets = useSafeAreaInsets();
-  const { width: screenWidth } = useWindowDimensions();
-  const imageWidth = screenWidth - 32;
+  const pixelRatio = PixelRatio.get();
 
   return (
     <Modal
@@ -40,7 +46,8 @@ export default function ImagePreview({
             <Text style={styles.title}>{title}</Text>
             {preview && (
               <Text style={styles.size}>
-                {preview.width} x {preview.height} dots
+                {preview.width} x {preview.height} dots, {preview.scale} px for
+                each dot
               </Text>
             )}
           </View>
@@ -60,8 +67,8 @@ export default function ImagePreview({
               style={[
                 styles.image,
                 {
-                  width: imageWidth,
-                  height: (imageWidth * preview.height) / preview.width,
+                  width: (preview.width * preview.scale) / pixelRatio,
+                  height: (preview.height * preview.scale) / pixelRatio,
                 },
               ]}
             />
@@ -109,11 +116,11 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   content: {
-    padding: 16,
+    padding: PADDING,
+    alignItems: "center",
   },
+  // No border: a border takes space from the image, and the image is then scaled and blurred again.
   image: {
     backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: colors.border,
   },
 });

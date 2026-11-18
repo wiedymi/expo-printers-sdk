@@ -18,11 +18,13 @@ export type EpsonPrintOptions = PrintOptions & {
   imageConversion?: EpsonImageConversion;
 };
 
-// The image that printImage sends to the printer, as a base64 PNG. width and height are in printer dots.
+// The image that printImage sends to the printer, as a base64 PNG. width and height are in printer dots. Each dot
+// is a square of scale x scale pixels in the PNG, so the PNG is width * scale pixels wide.
 export type EpsonImagePreview = {
   base64: string;
   width: number;
   height: number;
+  scale: number;
 };
 
 export type EpsonPrinterInfo = {

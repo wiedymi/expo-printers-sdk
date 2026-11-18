@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
 import type {
   EpsonImagePreview,
@@ -40,7 +41,7 @@ import PrintOptions, {
 import ActionBar, { type Action } from "./components/action-bar";
 import ResultsList from "./components/results-list";
 import LogViewer from "./components/log-viewer";
-import ImagePreview from "./components/image-preview";
+import ImagePreview, { previewTargetWidth } from "./components/image-preview";
 
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
@@ -58,6 +59,7 @@ export default function App() {
 
 function PrinterTester() {
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
   const [vendor, setVendor] = useState<Vendor>("EPSON");
   const [settings, setSettings] = useState<PrintSettings>(
     DEFAULT_PRINT_SETTINGS,
@@ -141,7 +143,12 @@ function PrinterTester() {
       settings.imageUrl,
     );
     setPreview(
-      await previewImage(selected, base64Image, toPrintOptions(settings)),
+      await previewImage(
+        selected,
+        base64Image,
+        toPrintOptions(settings),
+        previewTargetWidth(screenWidth),
+      ),
     );
   };
 
@@ -224,7 +231,7 @@ function PrinterTester() {
 
       <ImagePreview
         preview={preview}
-        title={`${RECEIPT_LABELS[settings.receipt]}, conversion ${settings.imageConversion}`}
+        title={`${selected ? printerName(selected) : ""}: ${RECEIPT_LABELS[settings.receipt]}, ${settings.imageConversion}`}
         onClose={() => setPreview(null)}
       />
     </View>

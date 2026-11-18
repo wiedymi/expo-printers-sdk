@@ -178,9 +178,15 @@ export const previewImage = (
   printer: Printer,
   base64Image: string,
   options: EpsonPrintOptions,
+  targetWidth: number,
 ): Promise<EpsonImagePreview> => {
   if (printer.vendor !== "EPSON") {
     throw new Error("Preview is available for Epson printers only");
   }
-  return EpsonPrinters.previewImage(base64Image, printer.info, options);
+  return EpsonPrinters.previewImage(
+    base64Image,
+    printer.info,
+    options,
+    targetWidth,
+  );
 };

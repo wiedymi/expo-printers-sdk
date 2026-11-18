@@ -70,7 +70,7 @@ class EpsonPrinter(
 
     // The image that printImage sends to the printer, made without a connection. The printable width comes from
     // paperWidth or the standard paper of the model, because the printer is not asked. With ImageConversion.SDK,
-    // the Epson SDK makes the image black and white when it prints, so the preview uses a similar threshold.
+    // the Epson SDK makes the image black and white when it prints, so the preview uses the same threshold.
     fun previewImage(
         base64Image: String,
         deviceData: PrinterDeviceData.EPSON,

@@ -165,24 +165,39 @@ class EpsonPrintersModule : Module() {
         }
 
         // Returns the image that printImage sends to the printer, as a base64 PNG with its size in dots.
-        AsyncFunction("previewImage") Coroutine { base64Image: String, deviceData: Map<String, Any>, options: PrintOptions? ->
+        // React Native smooths an image that it shows larger, so the dots of a small preview become blurred. With
+        // targetWidth, the width in pixels of the view that shows the preview, each dot becomes a square of `scale`
+        // pixels, and the app shows the PNG at its own size.
+        AsyncFunction("previewImage") Coroutine { base64Image: String, deviceData: Map<String, Any>, options: PrintOptions?, targetWidth: Int? ->
             val printer = requireNotNull(printer) { "Printer not initialized" }
             withContext(Dispatchers.Default) {
-                val image = printer.previewImage(
+                val dots = printer.previewImage(
                     base64Image,
                     deviceData.toEpsonDeviceData(),
                     options?.paperWidth,
                     options?.imageConversion ?: ImageConversion.AUTO,
                 )
+                val scale = previewScale(dots, targetWidth)
+                val image = if (scale == 1) {
+                    dots
+                } else {
+                    Bitmap.createScaledBitmap(dots, dots.width * scale, dots.height * scale, false)
+                }
                 val png = ByteArrayOutputStream().also { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
                 mapOf(
                     "base64" to Base64.encodeToString(png.toByteArray(), Base64.NO_WRAP),
-                    "width" to image.width,
-                    "height" to image.height,
+                    "width" to dots.width,
+                    "height" to dots.height,
+                    "scale" to scale,
                 )
             }
         }
     }
+
+    // The largest whole number of pixels for each dot that fits targetWidth, and keeps the PNG at most
+    // MAX_PREVIEW_HEIGHT pixels high.
+    private fun previewScale(dots: Bitmap, targetWidth: Int?): Int =
+        if (targetWidth == null) 1 else minOf(targetWidth / dots.width, MAX_PREVIEW_HEIGHT / dots.height).coerceAtLeast(1)
 
     private fun Map<String, Any>.toEpsonDeviceData() = PrinterDeviceData.EPSON(
         connectionType = safeGetString("connectionType").toPrinterConnectionType(),
@@ -193,4 +208,9 @@ class EpsonPrintersModule : Module() {
         macAddress = safeGetStringOrDefault("macAddress"),
         bdAddress = safeGetStringOrDefault("bdAddress")
     )
+
+    companion object {
+        // Many Android GPUs cannot draw a bitmap that is higher than this.
+        private const val MAX_PREVIEW_HEIGHT = 8192
+    }
 }
