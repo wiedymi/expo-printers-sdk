@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-18
+
 ### Added
 
 - Epson `imageConversion` print option: `"areaAverage"` (default) or `"sdk"` (the conversion of 0.11.0). See "Paper Width" in the README.
@@ -151,7 +153,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - TypeScript types for all modules.
 - Example app.
 
-[Unreleased]: https://github.com/wiedymi/expo-printers-sdk/compare/v0.11.0...main
+[Unreleased]: https://github.com/wiedymi/expo-printers-sdk/compare/v0.12.0...main
+[0.12.0]: https://www.npmjs.com/package/expo-printers-sdk/v/0.12.0
 [0.11.0]: https://www.npmjs.com/package/expo-printers-sdk/v/0.11.0
 [0.10.1]: https://www.npmjs.com/package/expo-printers-sdk/v/0.10.1
 [0.10.0]: https://www.npmjs.com/package/expo-printers-sdk/v/0.10.0
