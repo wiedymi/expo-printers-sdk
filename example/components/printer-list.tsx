@@ -16,6 +16,7 @@ type PrinterListProps = {
   printingStates: { [key: string]: boolean };
   onPrint: (printer: PrinterInfo) => void;
   onStatus: (printer: PrinterInfo) => void;
+  onPreview: (printer: PrinterInfo) => void;
 };
 
 const PrinterList: React.FC<PrinterListProps> = ({
@@ -24,6 +25,7 @@ const PrinterList: React.FC<PrinterListProps> = ({
   printingStates,
   onPrint,
   onStatus,
+  onPreview,
 }) => {
   if (!isSearching && printers.length === 0) {
     return (
@@ -46,6 +48,7 @@ const PrinterList: React.FC<PrinterListProps> = ({
             printer={printer}
             onPrint={onPrint}
             onStatus={onStatus}
+            onPreview={onPreview}
             isPrinting={!!printingStates[printerId]}
             printerId={printerId}
           />

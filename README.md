@@ -239,7 +239,9 @@ Check out our comprehensive example app in the `/example` folder that demonstrat
 
 - **Multi-manufacturer printer discovery**
 - **Manual IP/port connection**
-- **Real image fetching and printing**
+- **Sample images**: a short and a long receipt, a test chart with edge marks, line widths and gray steps, or an image from a URL
+- **Print options**: paper width, Epson image conversion, and 1 or 3 jobs for each tap, to test the print queue
+- **Epson preview**: the image that the printer gets, without a printer
 - **Compact, modern UI**
 - **Comprehensive error handling**
 - **Modern React Native best practices**
@@ -276,6 +278,21 @@ The Epson impact printers (TM-U220, TM-U220II, TM-U330) have 192 dots on 76 mm p
 - A dot is black when it is darker than the dots around it, and white when it is lighter. Thus gray text, white text on a dark box and dark text on a light gray box all stay visible.
 
 For the best result on these printers, make the image 192 pixels wide, with black text only and no anti-aliasing.
+
+Epson `printImage` and `previewImage` take `imageConversion` in their options:
+
+- `"auto"` (default): `"areaAverage"` on the impact printers, `"sdk"` on the other printers.
+- `"sdk"`: the image is scaled to the printable width, and the Epson SDK makes it black and white. This is the conversion of version 0.11.0 and earlier.
+- `"areaAverage"`: the conversion above, on any Epson printer.
+
+`EpsonPrinters.previewImage` returns the image that `printImage` sends to the printer, as a base64 PNG with its size in dots. It does not connect to the printer, so the printable width comes from `paperWidth` or the standard paper of the model. With `"sdk"`, the Epson SDK makes this image black and white when it prints.
+
+```typescript
+const preview = await EpsonPrinters.previewImage(base64Image, printer, {
+  imageConversion: "areaAverage",
+});
+// <Image source={{ uri: `data:image/png;base64,${preview.base64}` }} />
+```
 
 ```typescript
 type PaperWidth = 58 | 80;
@@ -440,6 +457,18 @@ type EpsonPrintersModuleEvents = {
   onPrintersFound: (data: { printers: EpsonPrinterInfo[] }) => void;
   onPrintImage: (result: EpsonPrintResult) => void;
 };
+
+type EpsonImageConversion = "auto" | "sdk" | "areaAverage";
+
+type EpsonPrintOptions = PrintOptions & {
+  imageConversion?: EpsonImageConversion; // See Paper Width
+};
+
+type EpsonImagePreview = {
+  base64: string; // PNG
+  width: number; // Printer dots
+  height: number;
+};
 ```
 
 #### Methods
@@ -458,10 +487,13 @@ EpsonPrinters.connectManually(
 EpsonPrinters.getSupportedModels(): Promise<string[]>
 
 // Print base64 image to printer
-EpsonPrinters.printImage(base64Image: string, deviceData: EpsonPrinterInfo, options?: PrintOptions): Promise<boolean>
+EpsonPrinters.printImage(base64Image: string, deviceData: EpsonPrinterInfo, options?: EpsonPrintOptions): Promise<boolean>
 
 // Read printer status (see Printer Status)
 EpsonPrinters.getStatus(deviceData: EpsonPrinterInfo): Promise<PrinterStatus>
+
+// Make the image that printImage sends to the printer, without a connection (see Paper Width)
+EpsonPrinters.previewImage(base64Image: string, deviceData: EpsonPrinterInfo, options?: EpsonPrintOptions): Promise<EpsonImagePreview>
 
 // Event listener management
 EpsonPrinters.addListener(eventName: string, listener: Function): EventSubscription

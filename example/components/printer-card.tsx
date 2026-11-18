@@ -12,6 +12,7 @@ type PrinterCardProps = {
   printer: PrinterInfo;
   onPrint: (printer: PrinterInfo) => void;
   onStatus: (printer: PrinterInfo) => void;
+  onPreview: (printer: PrinterInfo) => void;
   isPrinting: boolean;
   printerId: string;
 };
@@ -20,6 +21,7 @@ const PrinterCard: React.FC<PrinterCardProps> = ({
   printer,
   onPrint,
   onStatus,
+  onPreview,
   isPrinting,
   printerId,
 }) => {
@@ -118,6 +120,16 @@ const PrinterCard: React.FC<PrinterCardProps> = ({
     <View style={styles.printerCard}>
       <View style={styles.printerHeader}>
         <Text style={styles.printerType}>{printer.type}</Text>
+        {printer.type === "EPSON" && (
+          <TouchableOpacity
+            style={styles.printButton}
+            onPress={() => onPreview(printer)}
+            accessibilityLabel="Preview the printed image"
+            accessible={true}
+          >
+            <Text style={styles.printButtonText}>Preview</Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           style={styles.printButton}
           onPress={() => onStatus(printer)}

@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
 import expo.modules.printers.commons.PrinterLog
+import expo.modules.printers.commons.ImageConversion
 import expo.modules.printers.commons.PaperStatus
 import expo.modules.printers.commons.PaperWidth
 import expo.modules.printers.commons.PrintReport
@@ -50,24 +51,47 @@ class EpsonPrinter(
         deviceData: PrinterDeviceData.EPSON,
         paperWidth: PaperWidth?,
         jobId: String?,
+    ): PrintReport<EpsonPrintResult> = printImage(base64Image, deviceData, paperWidth, jobId, ImageConversion.AUTO)
+
+    suspend fun printImage(
+        base64Image: String,
+        deviceData: PrinterDeviceData.EPSON,
+        paperWidth: PaperWidth?,
+        jobId: String?,
+        imageConversion: ImageConversion,
     ): PrintReport<EpsonPrintResult> {
         val steps = PrintSteps(TAG, jobId, ::vendorCodeOf)
         val result = steps.withPrinterLock(printLocks.of(deviceData.target)) {
-            print(base64Image, deviceData, paperWidth, steps)
+            print(base64Image, deviceData, paperWidth, imageConversion, steps)
         }
         return steps.report(result)
+    }
+
+    // The image that printImage sends to the printer, made without a connection. The printable width comes from
+    // paperWidth or the standard paper of the model, because the printer is not asked. With ImageConversion.SDK,
+    // the Epson SDK makes this image black and white when it prints.
+    fun previewImage(
+        base64Image: String,
+        deviceData: PrinterDeviceData.EPSON,
+        paperWidth: PaperWidth?,
+        imageConversion: ImageConversion,
+    ): Bitmap {
+        val image = requireNotNull(decodeImage(base64Image)) { "Invalid image data" }
+        val printerSeries = EpsonModelCapability.printerSeriesByName(deviceData.deviceName)
+        require(printerSeries != EpsonModelCapability.UNKNOWN) { "Unsupported Epson model: ${deviceData.deviceName}" }
+        val paperWidthSetting = paperWidth?.let(EpsonModelCapability::paperWidthSetting)
+        val printableWidth = EpsonModelCapability.printableWidth(printerSeries, paperWidthSetting)
+        return printableImage(image, printerSeries, printableWidth, imageConversion)
     }
 
     private suspend fun print(
         base64Image: String,
         deviceData: PrinterDeviceData.EPSON,
         paperWidth: PaperWidth?,
+        imageConversion: ImageConversion,
         steps: PrintSteps,
     ): EpsonPrintResult {
-        val img: Bitmap = runCatching {
-            val decodedString = Base64.decode(base64Image, Base64.DEFAULT)
-            BitmapFactory.decodeStream(ByteArrayInputStream(decodedString))
-        }.getOrNull()?.takeIf { it.width > 0 && it.height > 0 }
+        val img = decodeImage(base64Image)
             ?: return EpsonPrintResult.ErrorInvalidImage.also { steps.log("result", it.code) }
 
         val printerSeries = EpsonModelCapability.printerSeriesByName(deviceData.deviceName)
@@ -91,20 +115,13 @@ class EpsonPrinter(
                     else -> null
                 }
                 val printableWidth = EpsonModelCapability.printableWidth(printerSeries, paperWidthSetting)
-                // The ePOS SDK has no scaling option, and an image wider than the print area can print nothing.
-                // An impact printer has few dots (192 on 76 mm paper), so its image gets the conversion of
-                // toMonochrome. Thermal printers keep the scaling and the black and white conversion of the SDK.
-                val scaledImg = if (EpsonModelCapability.isImpactPrinter(printerSeries)) {
-                    img.toMonochrome(printableWidth)
-                } else {
-                    img.scaledToWidth(printableWidth)
-                }
+                val scaledImg = printableImage(img, printerSeries, printableWidth, imageConversion)
                 val printTimeLimit = EpsonModelCapability.printTimeLimit(printerSeries, scaledImg.height)
                 PrinterLog.i(
                     TAG,
                     "deviceName='${deviceData.deviceName}', paperWidth=$paperWidth, paperWidthSetting=$paperWidthSetting, " +
-                        "printableWidth=$printableWidth, imageWidth=${img.width}, scaledImageHeight=${scaledImg.height}, " +
-                        "printTimeLimit=$printTimeLimit",
+                        "printableWidth=$printableWidth, imageConversion=$imageConversion, imageWidth=${img.width}, " +
+                        "scaledImageHeight=${scaledImg.height}, printTimeLimit=$printTimeLimit",
                 )
 
                 steps.measure("add_commands") {
@@ -304,6 +321,28 @@ class EpsonPrinter(
                 }
             }
         }
+
+    private fun decodeImage(base64Image: String): Bitmap? = runCatching {
+        val decodedBytes = Base64.decode(base64Image, Base64.DEFAULT)
+        BitmapFactory.decodeStream(ByteArrayInputStream(decodedBytes))
+    }.getOrNull()?.takeIf { it.width > 0 && it.height > 0 }
+
+    // The ePOS SDK has no scaling option, and an image wider than the print area can print nothing, so the image is
+    // scaled to the printable width. An impact printer has few dots (192 on 76 mm paper), so AUTO uses toMonochrome
+    // for it.
+    private fun printableImage(
+        image: Bitmap,
+        printerSeries: Int,
+        printableWidth: Int,
+        imageConversion: ImageConversion,
+    ): Bitmap {
+        val areaAverage = when (imageConversion) {
+            ImageConversion.AUTO -> EpsonModelCapability.isImpactPrinter(printerSeries)
+            ImageConversion.SDK -> false
+            ImageConversion.AREA_AVERAGE -> true
+        }
+        return if (areaAverage) image.toMonochrome(printableWidth) else image.scaledToWidth(printableWidth)
+    }
 
     // Scales up or down to the width and keeps the aspect ratio.
     private fun Bitmap.scaledToWidth(targetWidth: Int): Bitmap {

@@ -5,6 +5,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Epson `imageConversion` print option: `"auto"` (default), `"sdk"` (the conversion of 0.11.0) or `"areaAverage"`. See "Paper Width" in the README.
+- `EpsonPrinters.previewImage` returns the image that `printImage` sends to the printer, as a base64 PNG, without a connection.
+- Example app: sample receipts and a test chart, an image URL, the Epson image conversion, 1 or 3 jobs for each tap, and the Epson preview.
+
 ### Changed
 
 - `getStatus` does not wait for a print. When a print or another status check uses the printer, it rejects at once with `ERR_PRINTER_BUSY`. A print waits for a status check that runs. Rongta has one connection for all its printers, so its `getStatus` gives `ERR_PRINTER_BUSY` while any Rongta printer prints. Before, Rongta `getStatus` waited for the print.

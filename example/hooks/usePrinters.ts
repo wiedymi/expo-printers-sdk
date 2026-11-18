@@ -8,10 +8,10 @@ import type {
   EpsonPrinterInfo,
   RongtaPrinterInfo,
   StarMicronicsPrinterInfo,
+  EpsonPrintOptions,
   EpsonPrintResult,
   RongtaPrintResult,
   StarMicronicsPrintResult,
-  PaperWidth,
   PrinterConnectionType,
   PrinterLogEvent,
   PrinterStatus,
@@ -21,6 +21,9 @@ import { deduplicatePrinters } from "../utils/printer-utils";
 
 type PrinterModule =
   typeof EpsonPrinters | typeof RongtaPrinters | typeof StarMicronicsPrinters;
+
+// Each print gets its own job ID, also when one tap sends several jobs.
+let nextJobNumber = 1;
 
 const logNative = (event: PrinterLogEvent): void => {
   const error = event.error
@@ -205,10 +208,10 @@ export const usePrinters = (manufacturer: Manufacturer) => {
       base64Image: string,
       printer: PrinterInfo,
       printerId: string,
-      paperWidth?: PaperWidth,
+      { paperWidth, imageConversion }: EpsonPrintOptions,
     ): Promise<boolean> => {
       setPrintingStates((prev) => ({ ...prev, [printerId]: true }));
-      const options = { jobId: `test-${Date.now()}`, paperWidth };
+      const options = { jobId: `test-${nextJobNumber++}`, paperWidth };
       console.log(
         `[Print] jobId: ${options.jobId}, paperWidth: ${paperWidth ?? "auto"}`,
       );
@@ -219,7 +222,7 @@ export const usePrinters = (manufacturer: Manufacturer) => {
             return await EpsonPrinters.printImage(
               base64Image,
               printer.info as EpsonPrinterInfo,
-              options,
+              { ...options, imageConversion },
             );
           case "RONGTA":
             return await RongtaPrinters.printImage(

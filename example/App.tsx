@@ -7,26 +7,41 @@ import {
   StyleSheet,
   Platform,
 } from "react-native";
-import type { PaperWidth, PrinterConnectionType } from "expo-printers-sdk";
+import { EpsonPrinters } from "expo-printers-sdk";
+import type {
+  EpsonImagePreview,
+  EpsonPrinterInfo,
+  EpsonPrintOptions,
+  PaperWidth,
+  PrinterConnectionType,
+} from "expo-printers-sdk";
 import type { Manufacturer, PrinterInfo } from "./types/printer";
 import { usePrinters } from "./hooks/usePrinters";
 import { usePermissions } from "./hooks/usePermissions";
 import { useLogs } from "./hooks/useLogs";
-import { fetchImageAsBase64, getUniquePrinterId } from "./utils/printer-utils";
+import { getUniquePrinterId } from "./utils/printer-utils";
+import { loadReceiptBase64 } from "./utils/receipts";
 import CompactPrinterSelector from "./components/compact-printer-selector";
 import PrinterList from "./components/printer-list";
 import LogViewer from "./components/log-viewer";
-import ButtonRow from "./components/button-row";
+import PrintOptions, { type PrintSettings } from "./components/print-options";
+import ImagePreview from "./components/image-preview";
 
-const TEST_IMAGE_URL = "https://placehold.co/600x400/000000/FFFFFF.png";
-
-type PaperWidthOption = "AUTO" | "58" | "80";
-
-const PAPER_WIDTH_LABELS: Record<PaperWidthOption, string> = {
-  AUTO: "Paper: auto",
-  "58": "58 mm",
-  "80": "80 mm",
+const DEFAULT_SETTINGS: PrintSettings = {
+  receipt: "SHORT",
+  imageUrl: "https://placehold.co/600x400/000000/FFFFFF.png",
+  paperWidth: "AUTO",
+  imageConversion: "auto",
+  jobCount: "1",
 };
+
+const toPrintOptions = (settings: PrintSettings): EpsonPrintOptions => ({
+  paperWidth:
+    settings.paperWidth === "AUTO"
+      ? undefined
+      : (Number(settings.paperWidth) as PaperWidth),
+  imageConversion: settings.imageConversion,
+});
 
 const MONO_FONT = Platform.select({
   ios: "Menlo",
@@ -40,8 +55,8 @@ export default function App() {
   const [selectedManufacturer, setSelectedManufacturer] =
     useState<Manufacturer>("RONGTA");
 
-  const [paperWidthOption, setPaperWidthOption] =
-    useState<PaperWidthOption>("AUTO");
+  const [settings, setSettings] = useState<PrintSettings>(DEFAULT_SETTINGS);
+  const [preview, setPreview] = useState<EpsonImagePreview | null>(null);
 
   const { logs, clearLogs } = useLogs();
   const { isRequestingPermissions, requestPermissions } = usePermissions();
@@ -105,32 +120,57 @@ export default function App() {
     console.log("[Print] Printer info:", printer);
 
     try {
-      console.log("[Print] Fetching test image...");
-      const base64Image = await fetchImageAsBase64(TEST_IMAGE_URL);
+      console.log(`[Print] Loading the ${settings.receipt} image...`);
+      const base64Image = await loadReceiptBase64(
+        settings.receipt,
+        settings.imageUrl,
+      );
       console.log(
-        `[Print] Image fetched (${base64Image.length} chars), sending to printer...`,
+        `[Print] Image loaded (${base64Image.length} chars), sending ${settings.jobCount} job(s)...`,
       );
 
-      const paperWidth: PaperWidth | undefined =
-        paperWidthOption === "AUTO"
-          ? undefined
-          : (Number(paperWidthOption) as PaperWidth);
-      const result = await printImage(
-        base64Image,
-        printer,
-        printerId,
-        paperWidth,
-      );
-      console.log(`[Print] printImage returned: ${result}`);
+      for (let job = 0; job < Number(settings.jobCount); job++) {
+        const result = await printImage(
+          base64Image,
+          printer,
+          printerId,
+          toPrintOptions(settings),
+        );
+        console.log(`[Print] printImage returned: ${result}`);
 
-      if (!result) {
-        console.error("[Print] Failed to initiate print job");
-        Alert.alert("Print Failed", "Failed to initiate print job");
+        if (!result) {
+          console.error("[Print] Failed to initiate print job");
+          Alert.alert("Print Failed", "Failed to initiate print job");
+          return;
+        }
       }
     } catch (error) {
       console.error("[Print] Error:", error);
       Alert.alert(
         "Print Failed",
+        error instanceof Error ? error.message : "Unknown error occurred",
+      );
+    }
+  };
+
+  const handlePreview = async (printer: PrinterInfo) => {
+    console.log(`[Preview] Making the ${settings.receipt} image...`);
+    try {
+      const base64Image = await loadReceiptBase64(
+        settings.receipt,
+        settings.imageUrl,
+      );
+      const result = await EpsonPrinters.previewImage(
+        base64Image,
+        printer.info as EpsonPrinterInfo,
+        toPrintOptions(settings),
+      );
+      console.log(`[Preview] ${result.width} x ${result.height} dots`);
+      setPreview(result);
+    } catch (error) {
+      console.error("[Preview] Failed:", error);
+      Alert.alert(
+        "Preview Failed",
         error instanceof Error ? error.message : "Unknown error occurred",
       );
     }
@@ -172,12 +212,7 @@ export default function App() {
           onManualConnect={handleManualConnect}
         />
 
-        <ButtonRow
-          options={["AUTO", "58", "80"]}
-          selected={paperWidthOption}
-          onSelect={setPaperWidthOption}
-          labelMap={PAPER_WIDTH_LABELS}
-        />
+        <PrintOptions settings={settings} onChange={setSettings} />
 
         <PrinterList
           printers={printers}
@@ -185,10 +220,16 @@ export default function App() {
           printingStates={printingStates}
           onPrint={handlePrint}
           onStatus={handleStatus}
+          onPreview={handlePreview}
         />
 
         <LogViewer logs={logs} onClear={clearLogs} maxHeight={180} />
       </View>
+      <ImagePreview
+        preview={preview}
+        title={`${settings.receipt}, ${settings.imageConversion}`}
+        onClose={() => setPreview(null)}
+      />
     </SafeAreaView>
   );
 }
