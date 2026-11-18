@@ -32,6 +32,9 @@ const fetchImageAsBase64 = async (imageUrl: string): Promise<string> => {
   });
 };
 
+// The bundled images do not change, so each one is read only once.
+const assetBase64 = new Map<number, Promise<string>>();
+
 const loadAssetAsBase64 = async (assetModule: number): Promise<string> => {
   const asset = Asset.fromModule(assetModule);
   // In an Android release build, expo-asset gives a bundled image its drawable resource name as localUri, not
@@ -45,10 +48,21 @@ const loadAssetAsBase64 = async (assetModule: number): Promise<string> => {
   return new File(asset.localUri).base64();
 };
 
+const cachedAssetBase64 = (assetModule: number): Promise<string> => {
+  let base64 = assetBase64.get(assetModule);
+  if (!base64) {
+    base64 = loadAssetAsBase64(assetModule);
+    // A failed read is tried again on the next call.
+    base64.catch(() => assetBase64.delete(assetModule));
+    assetBase64.set(assetModule, base64);
+  }
+  return base64;
+};
+
 export const loadReceiptBase64 = (
   receipt: ReceiptOption,
   imageUrl: string,
 ): Promise<string> =>
   receipt === "URL"
     ? fetchImageAsBase64(imageUrl)
-    : loadAssetAsBase64(RECEIPT_ASSETS[receipt]);
+    : cachedAssetBase64(RECEIPT_ASSETS[receipt]);

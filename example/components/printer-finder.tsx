@@ -1,12 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type { PrinterConnectionType } from "expo-printers-sdk";
 import type { Vendor } from "../types/printer";
 import {
@@ -17,6 +10,7 @@ import {
   needsModelName,
 } from "../utils/printers";
 import { colors } from "../theme";
+import Button from "./button";
 import Segmented from "./segmented";
 import ModelPicker from "./model-picker";
 import { Label } from "./section";
@@ -74,19 +68,11 @@ export default function PrinterFinder({
         value={connectionType}
         onChange={setConnectionType}
       />
-      <Pressable
-        style={[styles.button, searching && styles.buttonDisabled]}
+      <Button
+        label={`Search ${VENDOR_LABELS[vendor]} ${connectionType}`}
         onPress={() => onSearch(connectionType)}
-        disabled={searching}
-      >
-        {searching ? (
-          <ActivityIndicator color={colors.onPrimary} size="small" />
-        ) : (
-          <Text style={styles.buttonText}>
-            Search {VENDOR_LABELS[vendor]} {connectionType}
-          </Text>
-        )}
-      </Pressable>
+        loading={searching}
+      />
 
       <Label>Or add a network printer</Label>
       <View style={styles.row}>
@@ -119,17 +105,11 @@ export default function PrinterFinder({
             </Text>
           </Pressable>
         )}
-        <Pressable
-          style={[
-            styles.button,
-            styles.addButton,
-            !canAdd && styles.buttonDisabled,
-          ]}
+        <Button
+          label="Add"
           onPress={() => onAdd(ipAddress.trim(), portNumber, modelName)}
           disabled={!canAdd}
-        >
-          <Text style={styles.buttonText}>Add</Text>
-        </Pressable>
+        />
       </View>
 
       <ModelPicker
@@ -175,23 +155,5 @@ const styles = StyleSheet.create({
   placeholder: {
     color: colors.muted,
     fontSize: 14,
-  },
-  button: {
-    backgroundColor: colors.primary,
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  addButton: {
-    paddingHorizontal: 22,
-  },
-  buttonDisabled: {
-    opacity: 0.4,
-  },
-  buttonText: {
-    color: colors.onPrimary,
-    fontSize: 14,
-    fontWeight: "600",
   },
 });

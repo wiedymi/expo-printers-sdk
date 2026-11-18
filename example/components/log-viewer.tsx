@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { memo, useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import type { LogEntry, LogLevel } from "../types/printer";
 import { colors, MONO_FONT } from "../theme";
@@ -25,12 +25,26 @@ const LEVEL_COLORS: Record<LogLevel, string> = {
   error: "#f87171",
 };
 
+// A log line does not change, so it renders only once.
+const LogLine = memo(function LogLine({ entry }: { entry: LogEntry }) {
+  return (
+    <Text
+      style={[styles.line, { color: LEVEL_COLORS[entry.level] }]}
+      selectable
+    >
+      {entry.time} {entry.tag}: {entry.message}
+    </Text>
+  );
+});
+
 // App and native log lines, newest at the bottom.
 export default function LogViewer({ logs }: { logs: LogEntry[] }) {
   const [filter, setFilter] = useState<LogFilter>("INFO");
   const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
-  const visible = logs.filter((entry) =>
-    LEVELS_BY_FILTER[filter].includes(entry.level),
+  const visible = useMemo(
+    () =>
+      logs.filter((entry) => LEVELS_BY_FILTER[filter].includes(entry.level)),
+    [logs, filter],
   );
 
   useEffect(() => {
@@ -54,15 +68,7 @@ export default function LogViewer({ logs }: { logs: LogEntry[] }) {
         {visible.length === 0 ? (
           <Text style={styles.line}>No log lines.</Text>
         ) : (
-          visible.map((entry) => (
-            <Text
-              key={entry.id}
-              style={[styles.line, { color: LEVEL_COLORS[entry.level] }]}
-              selectable
-            >
-              {entry.time} {entry.tag}: {entry.message}
-            </Text>
-          ))
+          visible.map((entry) => <LogLine key={entry.id} entry={entry} />)
         )}
       </ScrollView>
     </View>

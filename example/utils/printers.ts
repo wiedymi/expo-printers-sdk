@@ -140,14 +140,11 @@ export const connectManually = async (
 export const printImage = (
   printer: Printer,
   base64Image: string,
-  { imageConversion, ...options }: EpsonPrintOptions,
+  options: EpsonPrintOptions,
 ): Promise<boolean> => {
   switch (printer.vendor) {
     case "EPSON":
-      return EpsonPrinters.printImage(base64Image, printer.info, {
-        ...options,
-        imageConversion,
-      });
+      return EpsonPrinters.printImage(base64Image, printer.info, options);
     case "STAR":
       return StarMicronicsPrinters.printImage(
         base64Image,

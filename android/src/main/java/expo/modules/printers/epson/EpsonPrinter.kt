@@ -52,7 +52,7 @@ class EpsonPrinter(
         deviceData: PrinterDeviceData.EPSON,
         paperWidth: PaperWidth?,
         jobId: String?,
-    ): PrintReport<EpsonPrintResult> = printImage(base64Image, deviceData, paperWidth, jobId, ImageConversion.AREA_AVERAGE)
+    ): PrintReport<EpsonPrintResult> = printImage(base64Image, deviceData, paperWidth, jobId, ImageConversion.DEFAULT)
 
     suspend fun printImage(
         base64Image: String,
@@ -78,8 +78,7 @@ class EpsonPrinter(
         imageConversion: ImageConversion,
     ): Bitmap {
         val image = requireNotNull(decodeImage(base64Image)) { "Invalid image data" }
-        val printerSeries = EpsonModelCapability.printerSeriesByName(deviceData.deviceName)
-        require(printerSeries != EpsonModelCapability.UNKNOWN) { "Unsupported Epson model: ${deviceData.deviceName}" }
+        val printerSeries = requirePrinterSeries(deviceData.deviceName)
         val paperWidthSetting = paperWidth?.let(EpsonModelCapability::paperWidthSetting)
         val printableWidth = EpsonModelCapability.printableWidth(printerSeries, paperWidthSetting)
         val printable = printableImage(image, printableWidth, imageConversion)
@@ -181,8 +180,7 @@ class EpsonPrinter(
     }
 
     override suspend fun getStatus(deviceData: PrinterDeviceData.EPSON): PrinterStatus {
-        val printerSeries = EpsonModelCapability.printerSeriesByName(deviceData.deviceName)
-        require(printerSeries != EpsonModelCapability.UNKNOWN) { "Unsupported Epson model: ${deviceData.deviceName}" }
+        val printerSeries = requirePrinterSeries(deviceData.deviceName)
         return printLocks.of(deviceData.target).withLockOrBusy { readStatus(printerSeries, deviceData.target) }
     }
 
@@ -325,6 +323,11 @@ class EpsonPrinter(
                     continuation.resume(null)
                 }
             }
+        }
+
+    private fun requirePrinterSeries(deviceName: String): Int =
+        EpsonModelCapability.printerSeriesByName(deviceName).also { printerSeries ->
+            require(printerSeries != EpsonModelCapability.UNKNOWN) { "Unsupported Epson model: $deviceName" }
         }
 
     private fun decodeImage(base64Image: String): Bitmap? = runCatching {

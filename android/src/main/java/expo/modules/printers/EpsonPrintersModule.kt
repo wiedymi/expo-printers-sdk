@@ -142,7 +142,7 @@ class EpsonPrintersModule : Module() {
                         epsonDeviceData,
                         options?.paperWidth,
                         options?.jobId,
-                        options?.imageConversion ?: ImageConversion.AREA_AVERAGE,
+                        options?.imageConversion ?: ImageConversion.DEFAULT,
                     )
                     sendEvent(
                         "onPrintImage",
@@ -175,7 +175,7 @@ class EpsonPrintersModule : Module() {
                     base64Image,
                     deviceData.toEpsonDeviceData(),
                     options?.paperWidth,
-                    options?.imageConversion ?: ImageConversion.AREA_AVERAGE,
+                    options?.imageConversion ?: ImageConversion.DEFAULT,
                 )
                 val scale = previewScale(dots, targetWidth)
                 val image = if (scale == 1) {

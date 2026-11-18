@@ -15,6 +15,11 @@ enum class PaperWidth(val value: Int) : Enumerable {
 enum class ImageConversion(val value: String) : Enumerable {
     AREA_AVERAGE("areaAverage"),
     SDK("sdk"),
+    ;
+
+    companion object {
+        val DEFAULT = AREA_AVERAGE
+    }
 }
 
 class PrintOptions : Record {

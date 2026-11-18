@@ -1,7 +1,6 @@
 import {
   Image,
   Modal,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,6 +10,7 @@ import {
 import type { EpsonImagePreview } from "expo-printers-sdk";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, MONO_FONT } from "../theme";
+import Button from "./button";
 
 type ImagePreviewProps = {
   preview: EpsonImagePreview | null;
@@ -51,9 +51,7 @@ export default function ImagePreview({
               </Text>
             )}
           </View>
-          <Pressable style={styles.close} onPress={onClose}>
-            <Text style={styles.closeText}>Close</Text>
-          </Pressable>
+          <Button label="Close" onPress={onClose} />
         </View>
         {preview && (
           <ScrollView
@@ -104,16 +102,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.muted,
     fontFamily: MONO_FONT,
-  },
-  close: {
-    backgroundColor: colors.primary,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  closeText: {
-    color: colors.onPrimary,
-    fontWeight: "600",
   },
   content: {
     padding: PADDING,
