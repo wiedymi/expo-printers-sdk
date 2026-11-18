@@ -52,7 +52,7 @@ class EpsonPrinter(
         deviceData: PrinterDeviceData.EPSON,
         paperWidth: PaperWidth?,
         jobId: String?,
-    ): PrintReport<EpsonPrintResult> = printImage(base64Image, deviceData, paperWidth, jobId, ImageConversion.AUTO)
+    ): PrintReport<EpsonPrintResult> = printImage(base64Image, deviceData, paperWidth, jobId, ImageConversion.AREA_AVERAGE)
 
     suspend fun printImage(
         base64Image: String,
@@ -82,8 +82,11 @@ class EpsonPrinter(
         require(printerSeries != EpsonModelCapability.UNKNOWN) { "Unsupported Epson model: ${deviceData.deviceName}" }
         val paperWidthSetting = paperWidth?.let(EpsonModelCapability::paperWidthSetting)
         val printableWidth = EpsonModelCapability.printableWidth(printerSeries, paperWidthSetting)
-        val printable = printableImage(image, printerSeries, printableWidth, imageConversion)
-        return if (usesAreaAverage(imageConversion, printerSeries)) printable else printable.toThresholdMonochrome()
+        val printable = printableImage(image, printableWidth, imageConversion)
+        return when (imageConversion) {
+            ImageConversion.AREA_AVERAGE -> printable
+            ImageConversion.SDK -> printable.toThresholdMonochrome()
+        }
     }
 
     private suspend fun print(
@@ -117,7 +120,7 @@ class EpsonPrinter(
                     else -> null
                 }
                 val printableWidth = EpsonModelCapability.printableWidth(printerSeries, paperWidthSetting)
-                val scaledImg = printableImage(img, printerSeries, printableWidth, imageConversion)
+                val scaledImg = printableImage(img, printableWidth, imageConversion)
                 val printTimeLimit = EpsonModelCapability.printTimeLimit(printerSeries, scaledImg.height)
                 PrinterLog.i(
                     TAG,
@@ -330,25 +333,11 @@ class EpsonPrinter(
     }.getOrNull()?.takeIf { it.width > 0 && it.height > 0 }
 
     // The ePOS SDK has no scaling option, and an image wider than the print area can print nothing, so the image is
-    // scaled to the printable width. An impact printer has few dots (192 on 76 mm paper), so AUTO uses toMonochrome
-    // for it.
-    private fun printableImage(
-        image: Bitmap,
-        printerSeries: Int,
-        printableWidth: Int,
-        imageConversion: ImageConversion,
-    ): Bitmap =
-        if (usesAreaAverage(imageConversion, printerSeries)) {
-            image.toMonochrome(printableWidth)
-        } else {
-            image.scaledToWidth(printableWidth)
-        }
-
-    private fun usesAreaAverage(imageConversion: ImageConversion, printerSeries: Int): Boolean =
+    // scaled to the printable width.
+    private fun printableImage(image: Bitmap, printableWidth: Int, imageConversion: ImageConversion): Bitmap =
         when (imageConversion) {
-            ImageConversion.AUTO -> EpsonModelCapability.isImpactPrinter(printerSeries)
-            ImageConversion.SDK -> false
-            ImageConversion.AREA_AVERAGE -> true
+            ImageConversion.AREA_AVERAGE -> image.toMonochrome(printableWidth)
+            ImageConversion.SDK -> image.scaledToWidth(printableWidth)
         }
 
     // Scales up or down to the width and keeps the aspect ratio.

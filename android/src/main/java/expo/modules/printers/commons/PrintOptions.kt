@@ -10,13 +10,11 @@ enum class PaperWidth(val value: Int) : Enumerable {
     MM80(80),
 }
 
-// How an Epson print makes the image black and white. AUTO uses AREA_AVERAGE on the impact printers and SDK on the
-// other printers. SDK scales the image with Bitmap.createScaledBitmap, and the Epson SDK makes it black and white.
-// AREA_AVERAGE uses toMonochrome.
+// How an Epson print makes the image black and white. AREA_AVERAGE, the default, uses toMonochrome. SDK scales the
+// image with Bitmap.createScaledBitmap, and the Epson SDK makes it black and white, as in version 0.11.0.
 enum class ImageConversion(val value: String) : Enumerable {
-    AUTO("auto"),
-    SDK("sdk"),
     AREA_AVERAGE("areaAverage"),
+    SDK("sdk"),
 }
 
 class PrintOptions : Record {

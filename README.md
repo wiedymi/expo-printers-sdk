@@ -273,18 +273,14 @@ type PrinterConnectionType = "Bluetooth" | "Network" | "USB";
 
 Set `paperWidth` for printers that have 58 mm paper and cannot report it, for example a 58 mm Rongta or a Star TSP100IV with the 58 mm paper guide.
 
-The Epson impact printers (TM-U220, TM-U220II, TM-U330) have 192 dots on 76 mm paper, so a receipt image is scaled down about 3 times. For these printers, the library makes the black and white image itself:
+Epson printers print only black and white dots. By default (`imageConversion: "areaAverage"`), the library makes the black and white image itself:
 
-- Each dot gets the average of all the image pixels that it covers, so thin lines do not disappear.
+- Each dot gets the average of all the image pixels that it covers, so thin lines do not disappear when the image is scaled down.
 - A dot is black when it is darker than the dots around it, and white when it is lighter. Thus gray text, white text on a dark box and dark text on a light gray box all stay visible.
 
-For the best result on these printers, make the image 192 pixels wide, with black text only and no anti-aliasing.
+With `imageConversion: "sdk"`, the image is scaled to the printable width, and the Epson SDK makes it black and white: a dot is black when its gray value is below 50%. Gray text can then print broken or not at all. This is the conversion of version 0.11.0 and earlier.
 
-Epson `printImage` and `previewImage` take `imageConversion` in their options:
-
-- `"auto"` (default): `"areaAverage"` on the impact printers, `"sdk"` on the other printers.
-- `"sdk"`: the image is scaled to the printable width, and the Epson SDK makes it black and white. This is the conversion of version 0.11.0 and earlier.
-- `"areaAverage"`: the conversion above, on any Epson printer.
+The Epson impact printers (TM-U220, TM-U220II, TM-U330) have only 192 dots on 76 mm paper, so a receipt image is scaled down about 3 times. For the best result on these printers, make the image 192 pixels wide, with black text only and no anti-aliasing.
 
 `EpsonPrinters.previewImage` returns the image that `printImage` sends to the printer, as a base64 PNG with its size in dots. It does not connect to the printer, so the printable width comes from `paperWidth` or the standard paper of the model. With `"sdk"`, the Epson SDK makes the image black and white when it prints, and the preview uses the same threshold (gray 0.299 R + 0.587 G + 0.114 B, black below 128), so the preview has the same dots as the print. The preview uses the model of `deviceData`, so preview with the model of the printer that prints.
 
@@ -472,7 +468,7 @@ type EpsonPrintersModuleEvents = {
   onPrintImage: (result: EpsonPrintResult) => void;
 };
 
-type EpsonImageConversion = "auto" | "sdk" | "areaAverage";
+type EpsonImageConversion = "areaAverage" | "sdk";
 
 type EpsonPrintOptions = PrintOptions & {
   imageConversion?: EpsonImageConversion; // See Paper Width

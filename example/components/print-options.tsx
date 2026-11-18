@@ -24,7 +24,7 @@ export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
   receipt: "SHORT",
   imageUrl: "https://placehold.co/600x400/000000/FFFFFF.png",
   paperWidth: "AUTO",
-  imageConversion: "auto",
+  imageConversion: "areaAverage",
   jobCount: "1",
 };
 
@@ -43,9 +43,8 @@ const PAPER_WIDTH_LABELS: Record<PaperWidthOption, string> = {
 };
 
 const IMAGE_CONVERSION_LABELS: Record<EpsonImageConversion, string> = {
-  auto: "Auto",
-  sdk: "SDK",
   areaAverage: "Area average",
+  sdk: "SDK (0.11.0)",
 };
 
 const JOB_COUNT_LABELS: Record<JobCountOption, string> = {
@@ -101,7 +100,7 @@ export default function PrintOptions({
         <>
           <Label>Image conversion (Epson)</Label>
           <Segmented
-            options={["auto", "sdk", "areaAverage"]}
+            options={["areaAverage", "sdk"]}
             value={settings.imageConversion}
             onChange={(imageConversion) => update({ imageConversion })}
             labels={IMAGE_CONVERSION_LABELS}

@@ -7,8 +7,7 @@ import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 
-// Half the side of the square of dots that gives the local mean, so the square is 7 x 7 dots, about one character
-// on a 192-dot printer.
+// Half the side of the square of dots that gives the local mean, so the square is 7 x 7 dots.
 private const val LOCAL_RADIUS = 3
 
 // A dot is black or white when its lightness differs from the local mean by more than this value.
@@ -22,7 +21,7 @@ internal fun Bitmap.scaledHeight(targetWidth: Int): Int =
         .coerceIn(1, Int.MAX_VALUE.toLong())
         .toInt()
 
-// Scales to the width, keeps the aspect ratio, and makes each dot black or white, for printers with few dots.
+// Scales to the width, keeps the aspect ratio, and makes each dot black or white.
 // Each dot gets the average lightness of all the image pixels that it covers. createScaledBitmap reads only a few
 // of these pixels, so thin lines can disappear when it scales down a lot.
 // A dot is black when it is darker than the mean of the dots around it by more than LOCAL_CONTRAST, and white when

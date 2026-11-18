@@ -8,11 +8,11 @@ import type {
 } from "./commons";
 
 // How the image becomes black and white.
-// "auto": "areaAverage" on the impact printers (TM-U220, TM-U220II, TM-U330), "sdk" on the other printers.
-// "sdk": the image is scaled to the printable width, and the Epson SDK makes it black and white.
-// "areaAverage": each dot gets the average of the image pixels that it covers, and is black or white by
-// comparison with the dots around it. Use it when the image is much wider than the printable width.
-export type EpsonImageConversion = "auto" | "sdk" | "areaAverage";
+// "areaAverage" (default): each dot gets the average of the image pixels that it covers, and is black or white by
+// comparison with the dots around it, so gray text and thin lines stay visible.
+// "sdk": the image is scaled to the printable width, and the Epson SDK makes it black and white with a fixed
+// threshold, as in version 0.11.0.
+export type EpsonImageConversion = "areaAverage" | "sdk";
 
 export type EpsonPrintOptions = PrintOptions & {
   imageConversion?: EpsonImageConversion;

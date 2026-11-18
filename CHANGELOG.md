@@ -7,7 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
-- Epson `imageConversion` print option: `"auto"` (default), `"sdk"` (the conversion of 0.11.0) or `"areaAverage"`. See "Paper Width" in the README.
+- Epson `imageConversion` print option: `"areaAverage"` (default) or `"sdk"` (the conversion of 0.11.0). See "Paper Width" in the README.
 - `EpsonPrinters.previewImage` returns the image that `printImage` sends to the printer, as a base64 PNG, without a connection. With `"sdk"`, it uses the same threshold as the Epson SDK, so it has the same dots. With `targetWidth`, each dot is a square of whole pixels, so the preview stays sharp in React Native.
 - Example app: sample receipts and a test chart, an image URL, the Epson image conversion, 1 or 3 jobs for each tap, and the Epson preview.
 
@@ -21,7 +21,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Fixed
 
 - `getStatus` rejected with codes such as `ERR_SF0` in minified release builds, not with `ERR_PRINTER_UNREACHABLE`, `ERR_PRINTER_BUSY` or `ERR_PRINTER_STATUS_UNAVAILABLE`. Expo made the code from the exception class name, and R8 changes class names. The codes are now set explicitly.
-- Epson impact printers (TM-U220, TM-U220II, TM-U330): text printed broken and grainy, and gray text printed pale or not at all. The image is scaled down about 3 times, and `Bitmap.createScaledBitmap` reads only a few of the pixels that each dot covers. The library now gives each dot the average of all these pixels, and makes a dot black or white by comparing it with the dots around it. Thermal printers do not change.
+- Epson: gray text printed pale, broken or not at all, because the Epson SDK makes each dot black only below 50% gray. On the impact printers (TM-U220, TM-U220II, TM-U330), all text printed broken and grainy: the image is scaled down about 3 times, and `Bitmap.createScaledBitmap` reads only a few of the pixels that each dot covers. The library now makes the black and white image itself on all Epson printers: each dot gets the average of all the pixels that it covers, and is black or white by comparison with the dots around it. Set `imageConversion: "sdk"` for the conversion of 0.11.0.
 - Epson and Star: a status check during a print could make the print fail, because the printer accepts one connection at a time.
 - Star: a slow Bluetooth port open could stop the prints and status checks of all Star printers for many minutes, until the app restarted. `StarIOPort.getPort` and `releasePort` are synchronized in the Star SDK, and each print that timed out left one more open in the queue. Now one open runs at a time. A print or status check waits up to 15 s for the open that runs and gives `CONNECTION_TIMEOUT` (`ERR_PRINTER_UNREACHABLE` for `getStatus`) when the wait ends first. When the printer answers, the next print opens a new port at once.
 
