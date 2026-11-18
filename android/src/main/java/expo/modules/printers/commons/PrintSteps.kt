@@ -5,6 +5,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.time.Duration
@@ -57,6 +59,15 @@ class PrintSteps(
 
     fun <R> report(result: R): PrintReport<R> = PrintReport(result, records.toList(), cause)
 
+    // Runs block when the job gets the lock of the printer, and logs the wait as the step wait_for_printer.
+    suspend inline fun <T> withPrinterLock(lock: Mutex, block: () -> T): T {
+        val waitStartNanos = System.nanoTime()
+        return lock.withLock {
+            log("wait_for_printer", "ok", waitStartNanos)
+            block()
+        }
+    }
+
     inline fun <T> measure(step: String, block: () -> T): T {
         val stepStartNanos = System.nanoTime()
         return try {
@@ -68,15 +79,16 @@ class PrintSteps(
     }
 
     // Runs a blocking SDK call on its own thread. If the call does not finish in time, this throws
-    // PrintStepTimeoutException and the call continues in the background. onLateResult receives the result
-    // of a call that finishes after the timeout, so the caller can release what it opened. Errors of cleanup
-    // steps (release, disconnect) do not replace the cause of the print result.
+    // PrintStepTimeoutException and the call continues in the background. onLateEnd receives the result or
+    // the error of a call that ends after the timeout, so the caller can release what it opened. The late end
+    // is logged as a warning with the real duration. Errors of cleanup steps (release, disconnect) do not
+    // replace the cause of the print result.
     @OptIn(ExperimentalCoroutinesApi::class)
     suspend fun <T> runWithTimeout(
         step: String,
         timeout: Duration,
         cleanup: Boolean = false,
-        onLateResult: (T) -> Unit = {},
+        onLateEnd: (Result<T>) -> Unit = {},
         block: () -> T,
     ): T {
         val stepStartNanos = System.nanoTime()
@@ -85,12 +97,22 @@ class PrintSteps(
             val timeoutException = PrintStepTimeoutException(step, timeout)
             failed(step, timeoutException, stepStartNanos, cleanup)
             call.invokeOnCompletion { lateCause ->
-                if (lateCause == null) {
-                    PrinterLog.i(tag, "jobId=$jobId step=$step finished after the timeout")
-                    onLateResult(call.getCompleted())
+                val (outcome, lateEnd) = if (lateCause == null) {
+                    "finished after the timeout" to Result.success(call.getCompleted())
                 } else {
-                    PrinterLog.w(tag, "jobId=$jobId step=$step failed after the timeout", lateCause)
+                    "failed after the timeout: ${lateCause::class.java.simpleName}: ${lateCause.message}" to
+                        Result.failure<T>(lateCause)
                 }
+                PrinterLog.step(
+                    tag,
+                    jobId,
+                    step,
+                    outcome,
+                    elapsedMillis(stepStartNanos),
+                    elapsedMillis(jobStartNanos),
+                    PrinterLog.Level.WARN,
+                )
+                onLateEnd(lateEnd)
             }
             throw timeoutException
         }

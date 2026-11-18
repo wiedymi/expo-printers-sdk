@@ -28,19 +28,26 @@ object PrinterLog {
 
     fun e(tag: String, message: String, throwable: Throwable? = null) = write(Level.ERROR, tag, message, throwable)
 
-    fun step(tag: String, jobId: String?, step: String, outcome: String, durationMs: Long, jobDurationMs: Long) =
-        write(
-            Level.INFO,
-            tag,
-            "jobId=$jobId step=$step outcome=$outcome stepMs=$durationMs jobMs=$jobDurationMs",
-            fields = mapOf(
-                "jobId" to jobId,
-                "step" to step,
-                "outcome" to outcome,
-                "durationMs" to durationMs,
-                "jobDurationMs" to jobDurationMs,
-            ),
-        )
+    fun step(
+        tag: String,
+        jobId: String?,
+        step: String,
+        outcome: String,
+        durationMs: Long,
+        jobDurationMs: Long,
+        level: Level = Level.INFO,
+    ) = write(
+        level,
+        tag,
+        "jobId=$jobId step=$step outcome=$outcome stepMs=$durationMs jobMs=$jobDurationMs",
+        fields = mapOf(
+            "jobId" to jobId,
+            "step" to step,
+            "outcome" to outcome,
+            "durationMs" to durationMs,
+            "jobDurationMs" to jobDurationMs,
+        ),
+    )
 
     private fun write(
         level: Level,

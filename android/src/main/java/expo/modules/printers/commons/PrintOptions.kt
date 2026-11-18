@@ -10,6 +10,18 @@ enum class PaperWidth(val value: Int) : Enumerable {
     MM80(80),
 }
 
+// How an Epson print makes the image black and white. AREA_AVERAGE, the default, uses toMonochrome. SDK scales the
+// image with Bitmap.createScaledBitmap, and the Epson SDK makes it black and white, as in version 0.11.0.
+enum class ImageConversion(val value: String) : Enumerable {
+    AREA_AVERAGE("areaAverage"),
+    SDK("sdk"),
+    ;
+
+    companion object {
+        val DEFAULT = AREA_AVERAGE
+    }
+}
+
 class PrintOptions : Record {
     @Field
     val paperWidth: PaperWidth? = null
@@ -17,4 +29,8 @@ class PrintOptions : Record {
     // Returned in the onPrintImage event and written in the logs, so the app can match a result to its job.
     @Field
     val jobId: String? = null
+
+    // Epson only.
+    @Field
+    val imageConversion: ImageConversion? = null
 }

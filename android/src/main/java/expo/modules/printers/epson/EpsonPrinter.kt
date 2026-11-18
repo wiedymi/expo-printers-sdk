@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
 import expo.modules.printers.commons.PrinterLog
+import expo.modules.printers.commons.ImageConversion
 import expo.modules.printers.commons.PaperStatus
 import expo.modules.printers.commons.PaperWidth
 import expo.modules.printers.commons.PrintReport
@@ -14,9 +15,14 @@ import expo.modules.printers.commons.Printer
 import expo.modules.printers.commons.PrinterBusyException
 import expo.modules.printers.commons.PrinterDeviceData
 import expo.modules.printers.commons.PrinterError
+import expo.modules.printers.commons.PrinterLocks
 import expo.modules.printers.commons.PrinterStatus
 import expo.modules.printers.commons.PrinterStatusUnavailableException
 import expo.modules.printers.commons.PrinterUnreachableException
+import expo.modules.printers.commons.scaledHeight
+import expo.modules.printers.commons.toMonochrome
+import expo.modules.printers.commons.toThresholdMonochrome
+import expo.modules.printers.commons.withLockOrBusy
 import expo.modules.printers.epson.internals.EpsonModelCapability
 import com.epson.epos2.Epos2CallbackCode
 import com.epson.epos2.Epos2Exception
@@ -27,11 +33,8 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.ByteArrayInputStream
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.resume
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -41,35 +44,58 @@ class EpsonPrinter(
     private val appContext: Context,
 ) : Printer<PrinterDeviceData.EPSON, EpsonPrintResult> {
 
-    // A print keeps its connection until the paper is printed, and a second connection to a printer in use fails,
-    // so the prints to one printer run one after another.
-    private val printLocks = ConcurrentHashMap<String, Mutex>()
+    // A print keeps its connection until the paper is printed, and a second connection to a printer in use fails.
+    private val printLocks = PrinterLocks()
 
     override suspend fun printImage(
         base64Image: String,
         deviceData: PrinterDeviceData.EPSON,
         paperWidth: PaperWidth?,
         jobId: String?,
+    ): PrintReport<EpsonPrintResult> = printImage(base64Image, deviceData, paperWidth, jobId, ImageConversion.DEFAULT)
+
+    suspend fun printImage(
+        base64Image: String,
+        deviceData: PrinterDeviceData.EPSON,
+        paperWidth: PaperWidth?,
+        jobId: String?,
+        imageConversion: ImageConversion,
     ): PrintReport<EpsonPrintResult> {
         val steps = PrintSteps(TAG, jobId, ::vendorCodeOf)
-        val waitStartNanos = System.nanoTime()
-        val result = printLocks.computeIfAbsent(deviceData.target) { Mutex() }.withLock {
-            steps.log("wait_for_printer", "ok", waitStartNanos)
-            print(base64Image, deviceData, paperWidth, steps)
+        val result = steps.withPrinterLock(printLocks.of(deviceData.target)) {
+            print(base64Image, deviceData, paperWidth, imageConversion, steps)
         }
         return steps.report(result)
+    }
+
+    // The image that printImage sends to the printer, made without a connection. The printable width comes from
+    // paperWidth or the standard paper of the model, because the printer is not asked. With ImageConversion.SDK,
+    // the Epson SDK makes the image black and white when it prints, so the preview uses the same threshold.
+    fun previewImage(
+        base64Image: String,
+        deviceData: PrinterDeviceData.EPSON,
+        paperWidth: PaperWidth?,
+        imageConversion: ImageConversion,
+    ): Bitmap {
+        val image = requireNotNull(decodeImage(base64Image)) { "Invalid image data" }
+        val printerSeries = requirePrinterSeries(deviceData.deviceName)
+        val paperWidthSetting = paperWidth?.let(EpsonModelCapability::paperWidthSetting)
+        val printableWidth = EpsonModelCapability.printableWidth(printerSeries, paperWidthSetting)
+        val printable = printableImage(image, printableWidth, imageConversion)
+        return when (imageConversion) {
+            ImageConversion.AREA_AVERAGE -> printable
+            ImageConversion.SDK -> printable.toThresholdMonochrome()
+        }
     }
 
     private suspend fun print(
         base64Image: String,
         deviceData: PrinterDeviceData.EPSON,
         paperWidth: PaperWidth?,
+        imageConversion: ImageConversion,
         steps: PrintSteps,
     ): EpsonPrintResult {
-        val img: Bitmap = runCatching {
-            val decodedString = Base64.decode(base64Image, Base64.DEFAULT)
-            BitmapFactory.decodeStream(ByteArrayInputStream(decodedString))
-        }.getOrNull()?.takeIf { it.width > 0 && it.height > 0 }
+        val img = decodeImage(base64Image)
             ?: return EpsonPrintResult.ErrorInvalidImage.also { steps.log("result", it.code) }
 
         val printerSeries = EpsonModelCapability.printerSeriesByName(deviceData.deviceName)
@@ -93,14 +119,13 @@ class EpsonPrinter(
                     else -> null
                 }
                 val printableWidth = EpsonModelCapability.printableWidth(printerSeries, paperWidthSetting)
-                // The ePOS SDK has no scaling option, and an image wider than the print area can print nothing.
-                val scaledImg = img.scaledToWidth(printableWidth)
+                val scaledImg = printableImage(img, printableWidth, imageConversion)
                 val printTimeLimit = EpsonModelCapability.printTimeLimit(printerSeries, scaledImg.height)
                 PrinterLog.i(
                     TAG,
                     "deviceName='${deviceData.deviceName}', paperWidth=$paperWidth, paperWidthSetting=$paperWidthSetting, " +
-                        "printableWidth=$printableWidth, imageWidth=${img.width}, scaledImageHeight=${scaledImg.height}, " +
-                        "printTimeLimit=$printTimeLimit",
+                        "printableWidth=$printableWidth, imageConversion=$imageConversion, imageWidth=${img.width}, " +
+                        "scaledImageHeight=${scaledImg.height}, printTimeLimit=$printTimeLimit",
                 )
 
                 steps.measure("add_commands") {
@@ -155,13 +180,15 @@ class EpsonPrinter(
     }
 
     override suspend fun getStatus(deviceData: PrinterDeviceData.EPSON): PrinterStatus {
-        val printerSeries = EpsonModelCapability.printerSeriesByName(deviceData.deviceName)
-        require(printerSeries != EpsonModelCapability.UNKNOWN) { "Unsupported Epson model: ${deviceData.deviceName}" }
+        val printerSeries = requirePrinterSeries(deviceData.deviceName)
+        return printLocks.of(deviceData.target).withLockOrBusy { readStatus(printerSeries, deviceData.target) }
+    }
 
+    private suspend fun readStatus(printerSeries: Int, target: String): PrinterStatus {
         val steps = PrintSteps(TAG, jobId = null, ::vendorCodeOf)
         val epsonPrinter = EpsPrinter(printerSeries, EpsPrinter.LANG_EN, appContext)
         try {
-            epsonPrinter.connectWithTimeout(deviceData.target, steps)
+            epsonPrinter.connectWithTimeout(target, steps)
         } catch (exception: Epos2Exception) {
             PrinterLog.e(TAG, "getStatus: connect failed with status ${exception.errorStatus}")
             throw if (exception.errorStatus == Epos2Exception.ERR_IN_USE) {
@@ -233,9 +260,11 @@ class EpsonPrinter(
         steps.runWithTimeout(
             "connect",
             CONNECT_TIMEOUT,
-            onLateResult = {
-                runCatching { disconnect() }
-                    .onFailure { throwable -> PrinterLog.e(TAG, "failed to close connection opened after timeout $throwable") }
+            onLateEnd = { result ->
+                result.onSuccess {
+                    runCatching { disconnect() }
+                        .onFailure { throwable -> PrinterLog.e(TAG, "failed to close connection opened after timeout $throwable") }
+                }
             },
         ) {
             connect(target, EpsPrinter.PARAM_DEFAULT)
@@ -296,13 +325,28 @@ class EpsonPrinter(
             }
         }
 
+    private fun requirePrinterSeries(deviceName: String): Int =
+        EpsonModelCapability.printerSeriesByName(deviceName).also { printerSeries ->
+            require(printerSeries != EpsonModelCapability.UNKNOWN) { "Unsupported Epson model: $deviceName" }
+        }
+
+    private fun decodeImage(base64Image: String): Bitmap? = runCatching {
+        val decodedBytes = Base64.decode(base64Image, Base64.DEFAULT)
+        BitmapFactory.decodeStream(ByteArrayInputStream(decodedBytes))
+    }.getOrNull()?.takeIf { it.width > 0 && it.height > 0 }
+
+    // The ePOS SDK has no scaling option, and an image wider than the print area can print nothing, so the image is
+    // scaled to the printable width.
+    private fun printableImage(image: Bitmap, printableWidth: Int, imageConversion: ImageConversion): Bitmap =
+        when (imageConversion) {
+            ImageConversion.AREA_AVERAGE -> image.toMonochrome(printableWidth)
+            ImageConversion.SDK -> image.scaledToWidth(printableWidth)
+        }
+
     // Scales up or down to the width and keeps the aspect ratio.
     private fun Bitmap.scaledToWidth(targetWidth: Int): Bitmap {
         if (width == targetWidth) return this
-        val targetHeight = (height.toLong() * targetWidth / width)
-            .coerceIn(1, Int.MAX_VALUE.toLong())
-            .toInt()
-        return Bitmap.createScaledBitmap(this, targetWidth, targetHeight, true)
+        return Bitmap.createScaledBitmap(this, targetWidth, scaledHeight(targetWidth), true)
     }
 
     // disconnect fails with ERR_PROCESSING while the SDK still runs a print, for example after the wait for the

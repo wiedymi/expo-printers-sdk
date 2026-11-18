@@ -44,12 +44,12 @@ import expo.modules.printers.commons.PrinterError
 import expo.modules.printers.commons.PrinterStatus
 import expo.modules.printers.commons.PrinterStatusUnavailableException
 import expo.modules.printers.commons.PrinterUnreachableException
+import expo.modules.printers.commons.withLockOrBusy
 import expo.modules.printers.rongta.bluetooth.getBluetoothAdapter
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -71,6 +71,9 @@ class RongtaPrinter(
 ) : Printer<PrinterDeviceData.Rongta, RongtaPrintResult> {
     private val printerFactory = ThermalPrinterFactory()
     private val printer = printerFactory.create()
+
+    // One SDK printer object serves all Rongta printers, so the prints and status checks of all printers run
+    // one at a time.
     private val printMutex = Mutex()
 
     override suspend fun printImage(
@@ -80,9 +83,7 @@ class RongtaPrinter(
         jobId: String?,
     ): PrintReport<RongtaPrintResult> {
         val steps = PrintSteps(TAG, jobId)
-        val waitStartNanos = System.nanoTime()
-        val result = printMutex.withLock {
-            steps.log("wait_for_printer", "ok", waitStartNanos)
+        val result = steps.withPrinterLock(printMutex) {
             sendPrintJob(base64Image, deviceData, paperWidth, steps).also { result -> steps.log("result", result.code) }
         }
         return steps.report(result)
@@ -144,7 +145,7 @@ class RongtaPrinter(
         }
     }
 
-    override suspend fun getStatus(deviceData: PrinterDeviceData.Rongta): PrinterStatus = printMutex.withLock {
+    override suspend fun getStatus(deviceData: PrinterDeviceData.Rongta): PrinterStatus = printMutex.withLockOrBusy {
         val steps = PrintSteps(TAG, jobId = null)
         val configBean = when (val configResult = configurePrinter(deviceData)) {
             is ConfigurationResult.Success -> configResult.configBean

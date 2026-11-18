@@ -239,7 +239,10 @@ Check out our comprehensive example app in the `/example` folder that demonstrat
 
 - **Multi-manufacturer printer discovery**
 - **Manual IP/port connection**
-- **Real image fetching and printing**
+- **Sample images**: a short and a long receipt, a test chart with edge marks, line widths and gray steps, or an image from a URL
+- **Print options**: paper width, Epson image conversion, and 1 or 3 jobs for each tap, to test the print queue
+- **Epson preview**: the image that the printer gets, without a printer
+- **Results**: each print job and status check with its error code, duration and steps, and the native logs with a level filter
 - **Compact, modern UI**
 - **Comprehensive error handling**
 - **Modern React Native best practices**
@@ -269,6 +272,37 @@ type PrinterConnectionType = "Bluetooth" | "Network" | "USB";
 3. The standard paper of the model (80 mm for most models). Rongta printers cannot report their model, so they use 80 mm.
 
 Set `paperWidth` for printers that have 58 mm paper and cannot report it, for example a 58 mm Rongta or a Star TSP100IV with the 58 mm paper guide.
+
+Epson printers print only black and white dots. By default (`imageConversion: "areaAverage"`), the library makes the black and white image itself:
+
+- Each dot gets the average of all the image pixels that it covers, so thin lines do not disappear when the image is scaled down.
+- A dot is black when it is darker than the dots around it, and white when it is lighter. Thus gray text, white text on a dark box and dark text on a light gray box all stay visible.
+
+With `imageConversion: "sdk"`, the image is scaled to the printable width, and the Epson SDK makes it black and white: a dot is black when its gray value is below 50%. Gray text can then print broken or not at all. This is the conversion of version 0.11.0 and earlier.
+
+The Epson impact printers (TM-U220, TM-U220II, TM-U330) have only 192 dots on 76 mm paper, so a receipt image is scaled down about 3 times. For the best result on these printers, make the image 192 pixels wide, with black text only and no anti-aliasing.
+
+`EpsonPrinters.previewImage` returns the image that `printImage` sends to the printer, as a base64 PNG with its size in dots. It does not connect to the printer, so the printable width comes from `paperWidth` or the standard paper of the model. With `"sdk"`, the Epson SDK makes the image black and white when it prints, and the preview uses the same threshold (gray 0.299 R + 0.587 G + 0.114 B, black below 128), so the preview has the same dots as the print. The preview uses the model of `deviceData`, so preview with the model of the printer that prints.
+
+React Native smooths an image that it shows larger, so the dots of a small preview become blurred. Set `targetWidth` to the width in pixels of the view that shows the preview. Each dot then becomes a sharp square of `scale` x `scale` pixels, and the app shows the PNG at its own size.
+
+```typescript
+const targetWidth = Math.floor(viewWidth * PixelRatio.get());
+const preview = await EpsonPrinters.previewImage(
+  base64Image,
+  printer,
+  { imageConversion: "areaAverage" },
+  targetWidth,
+);
+const pixelRatio = PixelRatio.get();
+// <Image
+//   source={{ uri: `data:image/png;base64,${preview.base64}` }}
+//   style={{
+//     width: (preview.width * preview.scale) / pixelRatio,
+//     height: (preview.height * preview.scale) / pixelRatio,
+//   }}
+// />
+```
 
 ```typescript
 type PaperWidth = 58 | 80;
@@ -318,6 +352,7 @@ try {
 - Epson uses `Printer.getStatus` of the ePOS SDK.
 - Star uses `StarIOPort.retreiveStatus`.
 - Rongta sends the ESC/POS real-time status requests `DLE EOT 1-4`. A printer that does not answer them gives `ERR_PRINTER_STATUS_UNAVAILABLE`.
+- A status check does not wait for a print and does not run during a print. When a print or another status check uses the printer, `getStatus` rejects at once with `ERR_PRINTER_BUSY`. A print waits for a status check that runs. Rongta has one connection for all its printers, so it gives `ERR_PRINTER_BUSY` while any Rongta printer prints.
 
 ### Timeouts and Retries
 
@@ -326,18 +361,21 @@ Every blocking call to a printer SDK has a time limit. If a call hangs, for exam
 | Step                        | Epson     | Star | Rongta                      |
 | --------------------------- | --------- | ---- | --------------------------- |
 | Connect or open the port    | 20 s      | 15 s | 30 s (10 s for `getStatus`) |
+| Wait for another port open  | -         | 15 s | -                           |
 | USB permission answer       | -         | -    | 60 s                        |
 | Printer status before print | -         | 10 s | -                           |
 | Send the data               | see below | 30 s | 30 s                        |
 | Print result                | see below | 35 s | 60 s                        |
 | Disconnect or release       | 5 s       | 5 s  | 5 s                         |
 
-- Star over Bluetooth: if the port does not open or the status check before the print fails, the print starts again once on a new connection after 1 second. There is no retry after print data was sent, so a receipt is not printed twice.
+- Star over Bluetooth: if the port open or the status check before the print fails with an error, the print starts again once on a new connection after 1 second. There is no retry after a timeout, because it makes the print and the prints after it much longer. There is no retry after print data was sent, so a receipt is not printed twice.
+- Star opens one port at a time in the app. `StarIOPort.getPort` and `releasePort` are synchronized in the Star SDK, so a slow open, for example over Bluetooth, stops the opens of all Star printers, also after its timeout. A print or status check waits up to 15 s for the open that runs and does not start a second open. When the printer answers, the next print opens a new port at once.
 - Epson send and print result: the Epson SDK gives the print result when the print ends, and the connection stays open until then. The time limit of the print is 10 s plus 5 ms for each row of the scaled image, or 100 ms for each row on the impact printers (TM-U220, TM-U220II, TM-U330), and at most 300 s. Sending the data and the wait for the result each end 5 s after this limit.
-- A print sends its `onPrintImage` result within about 2 minutes after it starts. A long receipt on an Epson impact printer can take more time. Rongta prints one job at a time, and Epson prints one job at a time on each printer, so a job can first wait for the job before it.
+- A print sends its `onPrintImage` result within about 2 minutes after it starts. A long receipt on an Epson impact printer, or a Star print that waits for another port open and then starts again, can take more time. Rongta prints one job at a time, and Epson and Star print one job at a time on each printer, so a job can first wait for the job or the status check before it.
 - Timeouts give the error code `CONNECTION_TIMEOUT` or `PRINT_TIMEOUT`.
 - Set `jobId` in `PrintOptions` and compare it with `result.jobId`, so a late result is not counted for the next job.
 - The native logs show every step with its duration, for example `jobId=receipt-1 step=open_port outcome=ok stepMs=812 jobMs=830`. The log tags are `EpsonPrinter`, `StarMicronicsPrinter` and `RongtaPrinter`.
+- A call that ends after its timeout logs a warning with its real duration, for example `jobId=receipt-1 step=open_port outcome=finished after the timeout stepMs=48210 jobMs=48230`.
 
 ### Print Results and Native Logs
 
@@ -429,6 +467,19 @@ type EpsonPrintersModuleEvents = {
   onPrintersFound: (data: { printers: EpsonPrinterInfo[] }) => void;
   onPrintImage: (result: EpsonPrintResult) => void;
 };
+
+type EpsonImageConversion = "areaAverage" | "sdk";
+
+type EpsonPrintOptions = PrintOptions & {
+  imageConversion?: EpsonImageConversion; // See Paper Width
+};
+
+type EpsonImagePreview = {
+  base64: string; // PNG
+  width: number; // Printer dots
+  height: number;
+  scale: number; // PNG pixels for each dot, from targetWidth
+};
 ```
 
 #### Methods
@@ -447,10 +498,13 @@ EpsonPrinters.connectManually(
 EpsonPrinters.getSupportedModels(): Promise<string[]>
 
 // Print base64 image to printer
-EpsonPrinters.printImage(base64Image: string, deviceData: EpsonPrinterInfo, options?: PrintOptions): Promise<boolean>
+EpsonPrinters.printImage(base64Image: string, deviceData: EpsonPrinterInfo, options?: EpsonPrintOptions): Promise<boolean>
 
 // Read printer status (see Printer Status)
 EpsonPrinters.getStatus(deviceData: EpsonPrinterInfo): Promise<PrinterStatus>
+
+// Make the image that printImage sends to the printer, without a connection (see Paper Width)
+EpsonPrinters.previewImage(base64Image: string, deviceData: EpsonPrinterInfo, options?: EpsonPrintOptions, targetWidth?: number): Promise<EpsonImagePreview>
 
 // Event listener management
 EpsonPrinters.addListener(eventName: string, listener: Function): EventSubscription

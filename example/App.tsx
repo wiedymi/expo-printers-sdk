@@ -1,213 +1,263 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import {
-  SafeAreaView,
-  View,
-  Text,
   Alert,
+  ScrollView,
+  StatusBar,
   StyleSheet,
-  Platform,
+  Text,
+  View,
+  useWindowDimensions,
 } from "react-native";
-import type { PaperWidth, PrinterConnectionType } from "expo-printers-sdk";
-import type { Manufacturer, PrinterInfo } from "./types/printer";
+import type {
+  EpsonImagePreview,
+  PrinterConnectionType,
+} from "expo-printers-sdk";
+import type { Vendor } from "./types/printer";
 import { usePrinters } from "./hooks/usePrinters";
 import { usePermissions } from "./hooks/usePermissions";
-import { useLogs } from "./hooks/useLogs";
-import { fetchImageAsBase64, getUniquePrinterId } from "./utils/printer-utils";
-import CompactPrinterSelector from "./components/compact-printer-selector";
-import PrinterList from "./components/printer-list";
+import { useActivity } from "./hooks/useActivity";
+import {
+  canPreview,
+  connectManually,
+  getStatus,
+  previewImage,
+  printImage,
+  printerName,
+} from "./utils/printers";
+import { loadReceiptBase64, RECEIPT_LABELS } from "./utils/receipts";
+import {
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+import { colors } from "./theme";
+import Section from "./components/section";
+import PrinterFinder from "./components/printer-finder";
+import PrinterPicker from "./components/printer-picker";
+import PrintOptions, {
+  DEFAULT_PRINT_SETTINGS,
+  toPrintOptions,
+  type PrintSettings,
+} from "./components/print-options";
+import ActionBar, { type Action } from "./components/action-bar";
+import ResultsList from "./components/results-list";
 import LogViewer from "./components/log-viewer";
-import ButtonRow from "./components/button-row";
+import ImagePreview, { previewTargetWidth } from "./components/image-preview";
 
-const TEST_IMAGE_URL = "https://placehold.co/600x400/000000/FFFFFF.png";
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
 
-type PaperWidthOption = "AUTO" | "58" | "80";
-
-const PAPER_WIDTH_LABELS: Record<PaperWidthOption, string> = {
-  AUTO: "Paper: auto",
-  "58": "58 mm",
-  "80": "80 mm",
-};
-
-const MONO_FONT = Platform.select({
-  ios: "Menlo",
-  android: "monospace",
-  default: "monospace",
-});
+// Each print gets its own job ID, also when one tap sends several jobs.
+let nextJobNumber = 1;
 
 export default function App() {
-  const [selectedConnectionType, setSelectedConnectionType] =
-    useState<PrinterConnectionType>("Network");
-  const [selectedManufacturer, setSelectedManufacturer] =
-    useState<Manufacturer>("RONGTA");
+  return (
+    <SafeAreaProvider>
+      <PrinterTester />
+    </SafeAreaProvider>
+  );
+}
 
-  const [paperWidthOption, setPaperWidthOption] =
-    useState<PaperWidthOption>("AUTO");
+function PrinterTester() {
+  const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
+  const [vendor, setVendor] = useState<Vendor>("EPSON");
+  const [settings, setSettings] = useState<PrintSettings>(
+    DEFAULT_PRINT_SETTINGS,
+  );
+  const [running, setRunning] = useState<Action | null>(null);
+  const [preview, setPreview] = useState<EpsonImagePreview | null>(null);
 
-  const { logs, clearLogs } = useLogs();
-  const { isRequestingPermissions, requestPermissions } = usePermissions();
-  const {
-    printers,
-    isSearching,
-    supportedModels,
-    printingStates,
-    searchPrinters,
-    connectManually,
-    printImage,
-    getStatus,
-    refreshSupportedModels,
-  } = usePrinters(selectedManufacturer);
+  const activity = useActivity();
+  const { log, logError } = activity;
+  const printers = usePrinters(log);
+  const { requestPermissions } = usePermissions();
+  const selected = printers.selected;
 
-  const handleSearch = async () => {
+  const handleSearch = async (connectionType: PrinterConnectionType) => {
     try {
-      console.log(
-        `[Search] Starting ${selectedManufacturer} ${selectedConnectionType} search...`,
-      );
-      const hasPermissions = await requestPermissions();
-      if (!hasPermissions) {
-        console.warn("[Search] Permissions not granted");
-        return;
-      }
-
-      await searchPrinters(selectedConnectionType);
-      console.log(`[Search] Search initiated for ${selectedConnectionType}`);
+      if (!(await requestPermissions())) return;
+      await printers.search(vendor, connectionType);
     } catch (error) {
-      console.error("[Search] Failed:", error);
-      Alert.alert("Error", "Failed to find printers. Please try again.");
+      logError(`Search failed: ${errorMessage(error)}`);
     }
   };
 
-  const handleManualConnect = async (
+  const handleAdd = async (
     ipAddress: string,
-    modelName: string,
     port: number,
+    modelName: string,
   ) => {
     try {
-      console.log(
-        `[Manual] Connecting to ${selectedManufacturer} @ ${ipAddress}:${port}...`,
-      );
-      const printerInfo = await connectManually(ipAddress, modelName, port);
-      if (printerInfo) {
-        console.log("[Manual] Connected successfully:", printerInfo);
-        Alert.alert(
-          "Connected",
-          `${selectedManufacturer} ${modelName} @ ${ipAddress}:${port}`,
-        );
-      }
+      const printer = await connectManually(vendor, ipAddress, port, modelName);
+      printers.add(printer);
+      log(`Added ${printerName(printer)} at ${ipAddress}:${port}`);
     } catch (error) {
-      console.error("[Manual] Connection failed:", error);
-      Alert.alert("Error", "Failed to connect to printer");
+      logError(`Add failed: ${errorMessage(error)}`);
+      Alert.alert("Cannot add the printer", errorMessage(error));
     }
   };
 
-  const handlePrint = async (printer: PrinterInfo) => {
-    const printerId = getUniquePrinterId(printer);
-    console.log(`[Print] Starting print job for ${printerId}...`);
-    console.log("[Print] Printer info:", printer);
+  const handlePrint = async () => {
+    if (!selected) return;
+    const name = printerName(selected);
+    const base64Image = await loadReceiptBase64(
+      settings.receipt,
+      settings.imageUrl,
+    );
+    for (let job = 0; job < Number(settings.jobCount); job++) {
+      const jobId = `job-${nextJobNumber++}`;
+      activity.startPrint(jobId, name);
+      log(`${jobId}: ${RECEIPT_LABELS[settings.receipt]} to ${name}`);
+      const started = await printImage(selected, base64Image, {
+        ...toPrintOptions(settings),
+        jobId,
+      });
+      if (!started) {
+        activity.finishPrint({
+          jobId,
+          success: false,
+          errorCode: "NOT_INITIALIZED",
+          error: "The print did not start",
+          cause: null,
+          steps: [],
+        });
+      }
+    }
+  };
 
+  const handleStatus = async () => {
+    if (!selected) return;
+    const id = activity.startStatus(printerName(selected));
     try {
-      console.log("[Print] Fetching test image...");
-      const base64Image = await fetchImageAsBase64(TEST_IMAGE_URL);
-      console.log(
-        `[Print] Image fetched (${base64Image.length} chars), sending to printer...`,
-      );
+      activity.finishStatus(id, { status: await getStatus(selected) });
+    } catch (error) {
+      const code = (error as { code?: string }).code ?? errorMessage(error);
+      activity.finishStatus(id, { errorCode: code });
+    }
+  };
 
-      const paperWidth: PaperWidth | undefined =
-        paperWidthOption === "AUTO"
-          ? undefined
-          : (Number(paperWidthOption) as PaperWidth);
-      const result = await printImage(
+  const handlePreview = async () => {
+    if (!selected) return;
+    const base64Image = await loadReceiptBase64(
+      settings.receipt,
+      settings.imageUrl,
+    );
+    setPreview(
+      await previewImage(
+        selected,
         base64Image,
-        printer,
-        printerId,
-        paperWidth,
-      );
-      console.log(`[Print] printImage returned: ${result}`);
-
-      if (!result) {
-        console.error("[Print] Failed to initiate print job");
-        Alert.alert("Print Failed", "Failed to initiate print job");
-      }
-    } catch (error) {
-      console.error("[Print] Error:", error);
-      Alert.alert(
-        "Print Failed",
-        error instanceof Error ? error.message : "Unknown error occurred",
-      );
-    }
+        toPrintOptions(settings),
+        previewTargetWidth(screenWidth),
+      ),
+    );
   };
 
-  const handleStatus = async (printer: PrinterInfo) => {
-    console.log(`[Status] Reading status of ${getUniquePrinterId(printer)}...`);
+  const handleAction = async (action: Action) => {
+    setRunning(action);
     try {
-      const status = await getStatus(printer);
-      console.log("[Status] Result:", status);
-      Alert.alert(
-        status.online ? "Online" : "Offline",
-        `Cover open: ${status.coverOpen}\nPaper: ${status.paper}\nErrors: ${
-          status.errors.join(", ") || "none"
-        }`,
-      );
+      if (action === "print") await handlePrint();
+      if (action === "status") await handleStatus();
+      if (action === "preview") await handlePreview();
     } catch (error) {
-      const code = (error as { code?: string }).code ?? "UNKNOWN";
-      console.error(`[Status] Failed (${code}):`, error);
-      Alert.alert("Status Failed", code);
+      logError(`${action} failed: ${errorMessage(error)}`);
+      Alert.alert(`${action} failed`, errorMessage(error));
+    } finally {
+      setRunning(null);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
+    <View style={styles.screen}>
+      <StatusBar barStyle="dark-content" />
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + 12 },
+        ]}
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={styles.title}>Printers SDK</Text>
 
-        <CompactPrinterSelector
-          connectionType={selectedConnectionType}
-          manufacturer={selectedManufacturer}
-          isSearching={isSearching}
-          isRequestingPermissions={isRequestingPermissions}
-          supportedModels={supportedModels}
-          onConnectionTypeChange={setSelectedConnectionType}
-          onManufacturerChange={setSelectedManufacturer}
-          onSearch={handleSearch}
-          onRefreshModels={refreshSupportedModels}
-          onManualConnect={handleManualConnect}
-        />
+        <Section title="1. Find a printer">
+          <PrinterFinder
+            vendor={vendor}
+            onVendorChange={setVendor}
+            searching={printers.searching === vendor}
+            onSearch={handleSearch}
+            onAdd={handleAdd}
+          />
+        </Section>
 
-        <ButtonRow
-          options={["AUTO", "58", "80"]}
-          selected={paperWidthOption}
-          onSelect={setPaperWidthOption}
-          labelMap={PAPER_WIDTH_LABELS}
-        />
+        <Section title="2. Select a printer">
+          <PrinterPicker
+            printers={printers.printers}
+            selectedId={printers.selectedId}
+            onSelect={printers.select}
+          />
+        </Section>
 
-        <PrinterList
-          printers={printers}
-          isSearching={isSearching}
-          printingStates={printingStates}
-          onPrint={handlePrint}
-          onStatus={handleStatus}
-        />
+        <Section title="3. What to print">
+          <PrintOptions
+            settings={settings}
+            onChange={setSettings}
+            showImageConversion={selected?.vendor === "EPSON"}
+          />
+        </Section>
 
-        <LogViewer logs={logs} onClear={clearLogs} maxHeight={180} />
-      </View>
-    </SafeAreaView>
+        <Section
+          title="Results"
+          action={{ label: "Clear", onPress: activity.clearResults }}
+        >
+          <ResultsList results={activity.results} />
+        </Section>
+
+        <Section
+          title="Logs"
+          action={{ label: "Clear", onPress: activity.clearLogs }}
+        >
+          <LogViewer logs={activity.logs} />
+        </Section>
+      </ScrollView>
+
+      <View style={[styles.statusBar, { height: insets.top }]} />
+
+      <ActionBar
+        printerName={selected ? printerName(selected) : null}
+        canPreview={canPreview(selected)}
+        running={running}
+        onAction={handleAction}
+        bottomInset={insets.bottom}
+      />
+
+      <ImagePreview
+        preview={preview}
+        title={`${selected ? printerName(selected) : ""}: ${RECEIPT_LABELS[settings.receipt]}, ${settings.imageConversion}`}
+        onClose={() => setPreview(null)}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: colors.background,
   },
   content: {
-    flex: 1,
     padding: 16,
-    gap: 16,
+    gap: 14,
+  },
+  // The content scrolls under the transparent system status bar, so this keeps the bar readable.
+  statusBar: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.background,
   },
   title: {
-    fontSize: 20,
-    fontWeight: "700",
-    textAlign: "center",
-    color: "#111",
-    fontFamily: MONO_FONT,
+    fontSize: 22,
+    fontWeight: "800",
+    color: colors.text,
   },
 });

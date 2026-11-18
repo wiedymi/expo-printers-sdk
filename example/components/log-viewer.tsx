@@ -1,78 +1,74 @@
-import React, { useRef, useEffect } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  Platform,
-} from "react-native";
+import React, { memo, useEffect, useMemo, useRef, useState } from "react";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+import type { LogEntry, LogLevel } from "../types/printer";
+import { colors, MONO_FONT } from "../theme";
+import Segmented from "./segmented";
 
-export type LogEntry = {
-  id: number;
-  timestamp: string;
-  level: "log" | "info" | "warn" | "error";
-  message: string;
+type LogFilter = "ALL" | "INFO" | "WARN";
+
+const FILTER_LABELS: Record<LogFilter, string> = {
+  ALL: "All",
+  INFO: "No debug",
+  WARN: "Warnings",
 };
 
-type LogViewerProps = {
-  logs: LogEntry[];
-  onClear: () => void;
-  maxHeight?: number;
+const LEVELS_BY_FILTER: Record<LogFilter, LogLevel[]> = {
+  ALL: ["debug", "info", "warn", "error"],
+  INFO: ["info", "warn", "error"],
+  WARN: ["warn", "error"],
 };
 
-const MONO_FONT = Platform.select({
-  ios: "Menlo",
-  android: "monospace",
-  default: "monospace",
+const LEVEL_COLORS: Record<LogLevel, string> = {
+  debug: "#a1a1aa",
+  info: colors.logText,
+  warn: "#fbbf24",
+  error: "#f87171",
+};
+
+// A log line does not change, so it renders only once.
+const LogLine = memo(function LogLine({ entry }: { entry: LogEntry }) {
+  return (
+    <Text
+      style={[styles.line, { color: LEVEL_COLORS[entry.level] }]}
+      selectable
+    >
+      {entry.time} {entry.tag}: {entry.message}
+    </Text>
+  );
 });
 
-const LOG_COLORS = {
-  log: "#ccc",
-  info: "#66b3ff",
-  warn: "#ffaa33",
-  error: "#ff6666",
-};
-
-export default function LogViewer({
-  logs,
-  onClear,
-  maxHeight = 200,
-}: LogViewerProps) {
-  const scrollViewRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
+// App and native log lines, newest at the bottom.
+export default function LogViewer({ logs }: { logs: LogEntry[] }) {
+  const [filter, setFilter] = useState<LogFilter>("INFO");
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const visible = useMemo(
+    () =>
+      logs.filter((entry) => LEVELS_BY_FILTER[filter].includes(entry.level)),
+    [logs, filter],
+  );
 
   useEffect(() => {
-    // Auto-scroll to bottom when new logs arrive
-    scrollViewRef.current?.scrollToEnd({ animated: true });
-  }, [logs]);
+    scrollRef.current?.scrollToEnd({ animated: false });
+  }, [visible.length]);
 
   return (
-    <View style={[styles.container, { height: maxHeight }]}>
-      <View style={styles.header}>
-        <Text style={styles.headerText}>Logs ({logs.length})</Text>
-        <TouchableOpacity onPress={onClear} style={styles.clearButton}>
-          <Text style={styles.clearButtonText}>Clear</Text>
-        </TouchableOpacity>
-      </View>
+    <View style={styles.container}>
+      <Segmented
+        options={["ALL", "INFO", "WARN"]}
+        value={filter}
+        onChange={setFilter}
+        labels={FILTER_LABELS}
+      />
       <ScrollView
-        ref={scrollViewRef}
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        ref={scrollRef}
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        nestedScrollEnabled
       >
-        {logs.length === 0 ? (
-          <Text style={styles.emptyText}>No logs yet...</Text>
+        {visible.length === 0 ? (
+          <Text style={styles.line}>No log lines.</Text>
         ) : (
-          logs.map((log) => (
-            <View key={log.id} style={styles.logEntry}>
-              <Text style={styles.timestamp}>{log.timestamp}</Text>
-              <Text style={[styles.level, { color: LOG_COLORS[log.level] }]}>
-                [{log.level.toUpperCase()}]
-              </Text>
-              <Text style={[styles.message, { color: LOG_COLORS[log.level] }]}>
-                {log.message}
-              </Text>
-            </View>
-          ))
+          visible.map((entry) => <LogLine key={entry.id} entry={entry} />)
         )}
       </ScrollView>
     </View>
@@ -81,71 +77,20 @@ export default function LogViewer({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "#1a1a1a",
+    gap: 8,
+  },
+  scroll: {
+    height: 280,
+    backgroundColor: colors.logBackground,
     borderRadius: 8,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#333",
   },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: "#2a2a2a",
-    borderBottomWidth: 1,
-    borderBottomColor: "#333",
+  content: {
+    padding: 10,
+    gap: 3,
   },
-  headerText: {
-    color: "#aaa",
-    fontSize: 12,
-    fontFamily: MONO_FONT,
-    fontWeight: "600",
-  },
-  clearButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    backgroundColor: "#444",
-    borderRadius: 4,
-  },
-  clearButtonText: {
-    color: "#ccc",
-    fontSize: 10,
-    fontFamily: MONO_FONT,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 8,
-  },
-  emptyText: {
-    color: "#666",
+  line: {
     fontSize: 11,
+    color: colors.logText,
     fontFamily: MONO_FONT,
-    fontStyle: "italic",
-  },
-  logEntry: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginBottom: 2,
-  },
-  timestamp: {
-    color: "#888",
-    fontSize: 11,
-    fontFamily: MONO_FONT,
-    marginRight: 6,
-  },
-  level: {
-    fontSize: 11,
-    fontFamily: MONO_FONT,
-    fontWeight: "600",
-    marginRight: 6,
-  },
-  message: {
-    fontSize: 11,
-    fontFamily: MONO_FONT,
-    flex: 1,
   },
 });

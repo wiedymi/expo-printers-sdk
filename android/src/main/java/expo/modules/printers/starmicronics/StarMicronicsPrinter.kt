@@ -22,17 +22,24 @@ import expo.modules.printers.commons.PrinterBusyException
 import expo.modules.printers.commons.PrinterConnectionType
 import expo.modules.printers.commons.PrinterDeviceData
 import expo.modules.printers.commons.PrinterError
+import expo.modules.printers.commons.PrinterLocks
 import expo.modules.printers.commons.PrinterStatus
 import expo.modules.printers.commons.PrinterStatusUnavailableException
 import expo.modules.printers.commons.PrinterUnreachableException
+import expo.modules.printers.commons.withLockOrBusy
 import expo.modules.printers.starmicronics.internals.StarModelCapability
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.ByteArrayInputStream
 import kotlin.time.Duration.Companion.seconds
 
 class StarMicronicsPrinter(
     private val appContext: Context,
 ) : Printer<PrinterDeviceData.Star, StarMicronicsPrintResult> {
+
+    // A second port to a printer in use fails.
+    private val printLocks = PrinterLocks()
 
     override suspend fun printImage(
         base64Image: String,
@@ -41,7 +48,10 @@ class StarMicronicsPrinter(
         jobId: String?,
     ): PrintReport<StarMicronicsPrintResult> {
         val steps = PrintSteps(TAG, jobId, ::vendorCodeOf)
-        return steps.report(print(base64Image, deviceData, paperWidth, steps))
+        val result = steps.withPrinterLock(printLocks.of(portNameOf(deviceData))) {
+            print(base64Image, deviceData, paperWidth, steps)
+        }
+        return steps.report(result)
     }
 
     private suspend fun print(
@@ -82,10 +92,15 @@ class StarMicronicsPrinter(
     override suspend fun getStatus(deviceData: PrinterDeviceData.Star): PrinterStatus {
         val modelIndex = requireNotNull(modelIndexOf(deviceData)) { "Unsupported Star model: ${deviceData.modelName}" }
         val portName = portNameOf(deviceData)
-        val steps = PrintSteps(TAG, jobId = null, ::vendorCodeOf)
+        return printLocks.of(portName).withLockOrBusy {
+            readStatus(portName, StarModelCapability.getPortSettings(modelIndex))
+        }
+    }
 
+    private suspend fun readStatus(portName: String, portSettings: String): PrinterStatus {
+        val steps = PrintSteps(TAG, jobId = null, ::vendorCodeOf)
         val port = try {
-            openPort(portName, StarModelCapability.getPortSettings(modelIndex), steps)
+            openPort(portName, portSettings, steps)
         } catch (throwable: Exception) {
             logPrinterError("open port for status", throwable, portName)
             throw if (openPortFailure(throwable) == StarMicronicsPrintResult.PrinterInUse) {
@@ -105,7 +120,8 @@ class StarMicronicsPrinter(
         }
     }
 
-    // canRetry is true when the attempt failed on the connection before any print data was sent.
+    // canRetry is true when the attempt failed on the connection before any print data was sent, and not because a
+    // time limit ended. A retry after a time limit makes the job, and the jobs that wait for this printer, much longer.
     private class Attempt(val result: StarMicronicsPrintResult, val canRetry: Boolean)
 
     private suspend fun printOnce(
@@ -119,11 +135,7 @@ class StarMicronicsPrinter(
         } catch (throwable: Exception) {
             logPrinterError("open port", throwable, portName)
             val result = openPortFailure(throwable)
-            return Attempt(
-                result,
-                canRetry = result == StarMicronicsPrintResult.PortOpenFailed ||
-                    result == StarMicronicsPrintResult.ConnectionTimeout,
-            )
+            return Attempt(result, canRetry = result == StarMicronicsPrintResult.PortOpenFailed)
         }
 
         try {
@@ -131,7 +143,12 @@ class StarMicronicsPrinter(
                 steps.runWithTimeout("printer_status", PRINTER_STATUS_TIMEOUT) { port.beginCheckedBlock() }
             } catch (throwable: Exception) {
                 logPrinterError("read status before print", throwable, portName)
-                return Attempt(stepFailure(throwable), canRetry = true)
+                val result = stepFailure(throwable)
+                return Attempt(
+                    result,
+                    canRetry = result != StarMicronicsPrintResult.PrintTimeout &&
+                        result != StarMicronicsPrintResult.ConnectionTimeout,
+                )
             }
             val statusResult = mapPrinterStatus(status)
             if (statusResult != StarMicronicsPrintResult.Success) {
@@ -159,14 +176,36 @@ class StarMicronicsPrinter(
         }
     }
 
-    private suspend fun openPort(portName: String, portSettings: String, steps: PrintSteps): StarIOPort =
-        steps.runWithTimeout(
-            "open_port",
-            OPEN_PORT_TIMEOUT,
-            onLateResult = { port -> releasePortAfterTimeout(port, portName) },
-        ) {
-            StarIOPort.getPort(portName, portSettings, CONNECTION_TIMEOUT_MILLISECONDS, appContext)
+    // A job waits for the open that runs and does not add a second open to the queue of the SDK lock.
+    private suspend fun openPort(portName: String, portSettings: String, steps: PrintSteps): StarIOPort {
+        val waitStartNanos = System.nanoTime()
+        if (withTimeoutOrNull(OPEN_PORT_TIMEOUT) { portOpenLock.lock() } == null) {
+            val timeoutException = PrintStepTimeoutException("wait_for_open", OPEN_PORT_TIMEOUT)
+            steps.failed("wait_for_open", timeoutException, waitStartNanos, cleanup = false)
+            throw timeoutException
         }
+        steps.log("wait_for_open", "ok", waitStartNanos)
+
+        // After a timeout the open continues, and onLateEnd unlocks when it ends.
+        var unlockNow = true
+        try {
+            return steps.runWithTimeout(
+                "open_port",
+                OPEN_PORT_TIMEOUT,
+                onLateEnd = { result ->
+                    result.onSuccess { port -> releasePortAfterTimeout(port, portName) }
+                    portOpenLock.unlock()
+                },
+            ) {
+                StarIOPort.getPort(portName, portSettings, CONNECTION_TIMEOUT_MILLISECONDS, appContext)
+            }
+        } catch (timeoutException: PrintStepTimeoutException) {
+            unlockNow = false
+            throw timeoutException
+        } finally {
+            if (unlockNow) portOpenLock.unlock()
+        }
+    }
 
     private suspend fun releasePort(port: StarIOPort, portName: String, steps: PrintSteps) {
         try {
@@ -328,6 +367,11 @@ class StarMicronicsPrinter(
         private val SEND_DATA_TIMEOUT = 30.seconds
         private val PRINT_RESULT_TIMEOUT = 35.seconds
         private val RELEASE_PORT_TIMEOUT = 5.seconds
+
+        // StarIOPort.getPort and releasePort are synchronized on the class, so a slow Bluetooth open stops the opens
+        // of all Star printers in the app, also after its step timed out. Only one open runs at a time. The lock is
+        // released when the getPort call ends, not when its step times out.
+        private val portOpenLock = Mutex()
 
         // A Bluetooth print gets one more attempt on a new connection when no print data was sent.
         private const val BLUETOOTH_ATTEMPTS = 2

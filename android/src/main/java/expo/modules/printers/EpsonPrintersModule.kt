@@ -1,10 +1,13 @@
 package expo.modules.printers
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.util.Base64
 import expo.modules.printers.commons.PrinterLog
 import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.printers.commons.ImageConversion
 import expo.modules.printers.commons.NetworkValidator
 import expo.modules.printers.commons.PrintOptions
 import expo.modules.printers.commons.printNotStartedEvent
@@ -23,6 +26,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 
 class EpsonPrintersModule : Module() {
     private val TAG = "EpsonPrintersModule"
@@ -133,7 +137,13 @@ class EpsonPrintersModule : Module() {
                 val epsonDeviceData = deviceData.toEpsonDeviceData()
 
                 coroutineScope.launch(Dispatchers.IO) {
-                    val report = printer?.printImage(base64Image, epsonDeviceData, options?.paperWidth, options?.jobId)
+                    val report = printer?.printImage(
+                        base64Image,
+                        epsonDeviceData,
+                        options?.paperWidth,
+                        options?.jobId,
+                        options?.imageConversion ?: ImageConversion.DEFAULT,
+                    )
                     sendEvent(
                         "onPrintImage",
                         report?.toPrintImageEvent(options?.jobId)
@@ -153,7 +163,41 @@ class EpsonPrintersModule : Module() {
                 printer.getStatus(deviceData.toEpsonDeviceData()).toMap()
             }
         }
+
+        // Returns the image that printImage sends to the printer, as a base64 PNG with its size in dots.
+        // React Native smooths an image that it shows larger, so the dots of a small preview become blurred. With
+        // targetWidth, the width in pixels of the view that shows the preview, each dot becomes a square of `scale`
+        // pixels, and the app shows the PNG at its own size.
+        AsyncFunction("previewImage") Coroutine { base64Image: String, deviceData: Map<String, Any>, options: PrintOptions?, targetWidth: Int? ->
+            val printer = requireNotNull(printer) { "Printer not initialized" }
+            withContext(Dispatchers.Default) {
+                val dots = printer.previewImage(
+                    base64Image,
+                    deviceData.toEpsonDeviceData(),
+                    options?.paperWidth,
+                    options?.imageConversion ?: ImageConversion.DEFAULT,
+                )
+                val scale = previewScale(dots, targetWidth)
+                val image = if (scale == 1) {
+                    dots
+                } else {
+                    Bitmap.createScaledBitmap(dots, dots.width * scale, dots.height * scale, false)
+                }
+                val png = ByteArrayOutputStream().also { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                mapOf(
+                    "base64" to Base64.encodeToString(png.toByteArray(), Base64.NO_WRAP),
+                    "width" to dots.width,
+                    "height" to dots.height,
+                    "scale" to scale,
+                )
+            }
+        }
     }
+
+    // The largest whole number of pixels for each dot that fits targetWidth, and keeps the PNG at most
+    // MAX_PREVIEW_HEIGHT pixels high.
+    private fun previewScale(dots: Bitmap, targetWidth: Int?): Int =
+        if (targetWidth == null) 1 else minOf(targetWidth / dots.width, MAX_PREVIEW_HEIGHT / dots.height).coerceAtLeast(1)
 
     private fun Map<String, Any>.toEpsonDeviceData() = PrinterDeviceData.EPSON(
         connectionType = safeGetString("connectionType").toPrinterConnectionType(),
@@ -164,4 +208,9 @@ class EpsonPrintersModule : Module() {
         macAddress = safeGetStringOrDefault("macAddress"),
         bdAddress = safeGetStringOrDefault("bdAddress")
     )
+
+    companion object {
+        // Many Android GPUs cannot draw a bitmap that is higher than this.
+        private const val MAX_PREVIEW_HEIGHT = 8192
+    }
 }
